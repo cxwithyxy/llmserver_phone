@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -16,7 +17,6 @@ import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.data.DataStoreRepository
 import com.google.ai.edge.gallery.data.DownloadRepository
-import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
@@ -35,25 +35,23 @@ class LlmWebServerService : Service() {
   @Inject lateinit var customTasks: Set<@JvmSuppressWildcards CustomTask>
 
   private var webServer: LlmNanoHttpServer? = null
-  private lateinit var controller: LlmWebServerController
-  private lateinit var modelManagerViewModel: BackgroundModelManagerViewModel
+  private lateinit var inferenceEngine: LlmInferenceEngine
+  private lateinit var powerManager: PowerManager
   private var ipAddress: String = "0.0.0.0"
 
   override fun onCreate() {
     super.onCreate()
     ipAddress = resolveLocalIpAddress()
-    startForeground(NOTIFICATION_ID, createNotification())
-
-    modelManagerViewModel =
-      BackgroundModelManagerViewModel(
+    powerManager = getSystemService(PowerManager::class.java) ?: error("PowerManager unavailable")
+    inferenceEngine =
+      LlmInferenceEngine(
+        context = applicationContext,
         downloadRepository = downloadRepository,
         dataStoreRepository = dataStoreRepository,
         lifecycleProvider = lifecycleProvider,
         customTasks = customTasks,
-        context = applicationContext,
       )
-    modelManagerViewModel.loadModelAllowlist()
-
+    startForeground(NOTIFICATION_ID, createNotification())
     startServer()
   }
 
@@ -76,7 +74,7 @@ class LlmWebServerService : Service() {
 
   override fun onDestroy() {
     stopServer()
-    modelManagerViewModel.dispose()
+    inferenceEngine.dispose()
     Log.i(TAG, "LLM web service stopped")
     super.onDestroy()
   }
@@ -85,16 +83,9 @@ class LlmWebServerService : Service() {
 
   private fun startServer() {
     stopServer()
-    val preferredModelName = dataStoreRepository.getWebServiceModelName()
-    controller =
-      LlmWebServerController(
-        context = applicationContext,
-        modelManagerViewModel = modelManagerViewModel,
-        preferredModelName = preferredModelName,
-      )
     try {
       webServer =
-        LlmNanoHttpServer(controller = controller, port = DEFAULT_PORT).apply {
+        LlmNanoHttpServer(port = DEFAULT_PORT, requestHandler = this::handleChatRequest).apply {
           this.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
         }
       Log.i(TAG, "LLM web service listening on ${ipAddress}:$DEFAULT_PORT")
@@ -113,6 +104,13 @@ class LlmWebServerService : Service() {
   private fun restartServer() {
     ipAddress = resolveLocalIpAddress()
     startServer()
+  }
+
+  private suspend fun handleChatRequest(request: LlmWebRequest): LlmWebResponse {
+    return withWakeLock {
+      val preferred = inferenceEngine.getPreferredModelName()
+      inferenceEngine.handleChatRequest(request = request, preferredModelName = preferred)
+    }
   }
 
   private fun createNotification(): Notification {
@@ -140,6 +138,29 @@ class LlmWebServerService : Service() {
   private fun updateNotification() {
     val manager = getSystemService(NotificationManager::class.java)
     manager.notify(NOTIFICATION_ID, createNotification())
+  }
+
+  private suspend fun <T> withWakeLock(block: suspend () -> T): T {
+    val wakeLock = acquireWakeLock()
+    return try {
+      block()
+    } finally {
+      releaseWakeLock(wakeLock)
+    }
+  }
+
+  private fun acquireWakeLock(): PowerManager.WakeLock {
+    val wakeLock =
+      powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:WebServiceWakelock")
+    wakeLock.setReferenceCounted(false)
+    wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+    return wakeLock
+  }
+
+  private fun releaseWakeLock(wakeLock: PowerManager.WakeLock?) {
+    if (wakeLock?.isHeld == true) {
+      wakeLock.release()
+    }
   }
 
   private fun ensureNotificationChannel() {
@@ -171,25 +192,6 @@ class LlmWebServerService : Service() {
     return "0.0.0.0"
   }
 
-  private class BackgroundModelManagerViewModel(
-    downloadRepository: DownloadRepository,
-    dataStoreRepository: DataStoreRepository,
-    lifecycleProvider: AppLifecycleProvider,
-    customTasks: Set<@JvmSuppressWildcards CustomTask>,
-    context: Context,
-  ) :
-    ModelManagerViewModel(
-      downloadRepository = downloadRepository,
-      dataStoreRepository = dataStoreRepository,
-      lifecycleProvider = lifecycleProvider,
-      customTasks = customTasks,
-      context = context,
-    ) {
-    fun dispose() {
-      super.onCleared()
-    }
-  }
-
   companion object {
     private const val TAG = "LlmWebServerService"
     private const val CHANNEL_ID = "llmserver_web_service"
@@ -200,6 +202,7 @@ class LlmWebServerService : Service() {
       "com.google.ai.edge.gallery.webservice.action.STOP"
     private const val ACTION_RESTART_SERVICE =
       "com.google.ai.edge.gallery.webservice.action.RESTART"
+    private const val WAKE_LOCK_TIMEOUT_MS = 2 * 60 * 1000L
     const val DEFAULT_PORT = 8081
 
     fun start(context: Context) {

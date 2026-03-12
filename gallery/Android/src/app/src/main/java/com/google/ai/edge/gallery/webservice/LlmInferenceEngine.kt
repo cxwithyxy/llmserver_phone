@@ -1,9 +1,12 @@
 package com.google.ai.edge.gallery.webservice
 
 import android.content.Context
-import android.os.SystemClock
+import com.google.ai.edge.gallery.AppLifecycleProvider
 import com.google.ai.edge.gallery.common.processLlmResponse
+import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.data.BuiltInTaskId
+import com.google.ai.edge.gallery.data.DataStoreRepository
+import com.google.ai.edge.gallery.data.DownloadRepository
 import com.google.ai.edge.gallery.data.EMPTY_MODEL
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.ModelDownloadStatusType
@@ -13,38 +16,55 @@ import com.google.ai.edge.gallery.ui.llmchat.LlmModelInstance
 import com.google.ai.edge.gallery.ui.modelmanager.ModelInitializationStatusType
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import java.util.concurrent.atomic.AtomicInteger
+import javax.inject.Inject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 private const val ALLOWLIST_TIMEOUT_MS = 30_000L
 private const val INIT_TIMEOUT_MS = 90_000L
 private const val INFERENCE_TIMEOUT_MS = 120_000L
 private const val DEFAULT_CONVERSATION_PREFIX = "llmserver"
 
-/**
- * Orchestrates request validation, model preparation, and inference for the embedded web service.
- */
-class LlmWebServerController(
+class LlmInferenceEngine
+@Inject
+constructor(
   private val context: Context,
-  private val modelManagerViewModel: ModelManagerViewModel,
-  private val preferredModelName: String? = null,
+  downloadRepository: DownloadRepository,
+  private val dataStoreRepository: DataStoreRepository,
+  private val lifecycleProvider: AppLifecycleProvider,
+  private val customTasks: Set<@JvmSuppressWildcards CustomTask>,
 ) {
-  private val textTaskPriority = listOf(BuiltInTaskId.LLM_CHAT, BuiltInTaskId.LLM_PROMPT_LAB)
+  private val modelManagerViewModel =
+    BackgroundModelManagerViewModel(
+      downloadRepository = downloadRepository,
+      dataStoreRepository = dataStoreRepository,
+      lifecycleProvider = lifecycleProvider,
+      customTasks = customTasks,
+      context = context,
+    )
   private val mutex = Mutex()
   private val conversationCounter = AtomicInteger(0)
+  private val textTaskPriority = listOf(BuiltInTaskId.LLM_CHAT, BuiltInTaskId.LLM_PROMPT_LAB)
 
-  suspend fun handleChatRequest(request: LlmWebRequest): LlmWebResponse {
+  init {
+    modelManagerViewModel.loadModelAllowlist()
+  }
+
+  suspend fun handleChatRequest(
+    request: LlmWebRequest,
+    preferredModelName: String?,
+  ): LlmWebResponse {
     val trimmedMessage = request.message?.trim().orEmpty()
     require(trimmedMessage.isNotEmpty()) { "message must not be empty" }
 
     awaitAllowlistReady()
 
-    val model = resolveModel(request.model)
+    val model = resolveModel(requestedModelName = request.model ?: preferredModelName)
     val conversationId =
       request.conversationId ?: "$DEFAULT_CONVERSATION_PREFIX-${conversationCounter.incrementAndGet()}"
 
@@ -61,11 +81,14 @@ class LlmWebServerController(
       error("Model ${model.name} is not an LLM model")
     }
 
+    val supportImage = model.llmSupportImage && task.id == BuiltInTaskId.LLM_ASK_IMAGE
+    val supportAudio = model.llmSupportAudio && task.id == BuiltInTaskId.LLM_ASK_AUDIO
+
     val response =
       mutex.withLock {
         ensureModelReady(task, model)
         if (request.resetConversation == true) {
-          resetConversation(task, model)
+          resetConversation(model = model, supportImage = supportImage, supportAudio = supportAudio)
         }
         val (result, latency) = runInference(model = model, input = trimmedMessage)
         LlmWebResponse(
@@ -91,16 +114,10 @@ class LlmWebServerController(
     }
   }
 
-  private fun resolveModel(name: String?): Model {
-    val explicitModel = name?.let { modelManagerViewModel.getModelByName(it) }
+  private fun resolveModel(requestedModelName: String?): Model {
+    val explicitModel = requestedModelName?.let { modelManagerViewModel.getModelByName(it) }
     if (explicitModel != null) {
       return explicitModel
-    }
-
-    val preferredModel =
-      preferredModelName?.takeIf { it.isNotBlank() }?.let { modelManagerViewModel.getModelByName(it) }
-    if (preferredModel != null) {
-      return preferredModel
     }
 
     val selectedModel = modelManagerViewModel.uiState.value.selectedModel
@@ -114,20 +131,27 @@ class LlmWebServerController(
 
   private fun findTaskForModel(model: Model): Task? {
     val tasks = modelManagerViewModel.uiState.value.tasks
-    fun isCompatible(task: Task): Boolean {
-      if (!task.models.any { it.name == model.name }) {
-        return false
-      }
-      return when (task.id) {
-        BuiltInTaskId.LLM_ASK_AUDIO -> model.llmSupportAudio
-        BuiltInTaskId.LLM_ASK_IMAGE -> model.llmSupportImage
-        else -> true
-      }
-    }
     textTaskPriority.forEach { taskId ->
-      tasks.firstOrNull { task -> task.id == taskId && isCompatible(task) }?.let { return it }
+      tasks.firstOrNull { task ->
+        task.id == taskId && task.models.any { it.name == model.name }
+      }?.let { task ->
+        if (isTaskCompatible(task, model)) {
+          return task
+        }
+      }
     }
-    return tasks.firstOrNull { task -> isCompatible(task) }
+    return tasks.firstOrNull { isTaskCompatible(it, model) }
+  }
+
+  private fun isTaskCompatible(task: Task, model: Model): Boolean {
+    if (!task.models.any { it.name == model.name }) {
+      return false
+    }
+    return when (task.id) {
+      BuiltInTaskId.LLM_ASK_AUDIO -> model.llmSupportAudio
+      BuiltInTaskId.LLM_ASK_IMAGE -> model.llmSupportImage
+      else -> true
+    }
   }
 
   private suspend fun ensureModelReady(task: Task, model: Model) {
@@ -151,9 +175,7 @@ class LlmWebServerController(
     }
   }
 
-  private fun resetConversation(task: Task, model: Model) {
-    val supportImage = model.llmSupportImage && task.id == BuiltInTaskId.LLM_ASK_IMAGE
-    val supportAudio = model.llmSupportAudio && task.id == BuiltInTaskId.LLM_ASK_AUDIO
+  private fun resetConversation(model: Model, supportImage: Boolean, supportAudio: Boolean) {
     LlmChatModelHelper.resetConversation(
       model = model,
       supportImage = supportImage,
@@ -165,7 +187,7 @@ class LlmWebServerController(
     return withTimeout(INFERENCE_TIMEOUT_MS) {
       suspendCancellableCoroutine { continuation ->
         val builder = StringBuilder()
-        val start = SystemClock.elapsedRealtime()
+        val start = System.currentTimeMillis()
         try {
           LlmChatModelHelper.runInference(
             model = model,
@@ -178,7 +200,7 @@ class LlmWebServerController(
                 builder.append(partial)
               }
               if (done && !continuation.isCompleted) {
-                val latency = SystemClock.elapsedRealtime() - start
+                val latency = System.currentTimeMillis() - start
                 continuation.resume(
                   processLlmResponse(builder.toString()) to latency,
                 )
@@ -186,7 +208,7 @@ class LlmWebServerController(
             },
             cleanUpListener = {
               if (!continuation.isCompleted) {
-                val latency = SystemClock.elapsedRealtime() - start
+                val latency = System.currentTimeMillis() - start
                 continuation.resume(
                   processLlmResponse(builder.toString()) to latency,
                 )
@@ -209,6 +231,33 @@ class LlmWebServerController(
           instance?.conversation?.cancelProcess()
         }
       }
+    }
+  }
+
+  fun dispose() {
+    modelManagerViewModel.dispose()
+  }
+
+  fun getPreferredModelName(): String {
+    return dataStoreRepository.getWebServiceModelName()
+  }
+
+  private class BackgroundModelManagerViewModel(
+    downloadRepository: DownloadRepository,
+    dataStoreRepository: DataStoreRepository,
+    lifecycleProvider: AppLifecycleProvider,
+    customTasks: Set<@JvmSuppressWildcards CustomTask>,
+    context: Context,
+  ) :
+    ModelManagerViewModel(
+      downloadRepository = downloadRepository,
+      dataStoreRepository = dataStoreRepository,
+      lifecycleProvider = lifecycleProvider,
+      customTasks = customTasks,
+      context = context,
+    ) {
+    fun dispose() {
+      super.onCleared()
     }
   }
 }

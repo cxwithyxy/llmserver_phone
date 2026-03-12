@@ -14,8 +14,8 @@ typealias Method = NanoHTTPD.Method
 private const val MIME_JSON = "application/json"
 
 class LlmNanoHttpServer(
-  private val controller: LlmWebServerController,
   port: Int,
+  private val requestHandler: suspend (LlmWebRequest) -> LlmWebResponse,
 ) : NanoHTTPD(port) {
 
   override fun serve(session: IHTTPSession): Response {
@@ -31,7 +31,7 @@ class LlmNanoHttpServer(
     return try {
       val requestBody = readBody(session)
       val request = parseRequest(requestBody)
-      val response = runBlocking { controller.handleChatRequest(request) }
+      val response = runBlocking { requestHandler.invoke(request) }
       jsonResponse(Response.Status.OK, response)
     } catch (ex: IllegalArgumentException) {
       jsonError(Response.Status.BAD_REQUEST, ex.message ?: "Invalid request")
