@@ -1,0 +1,14 @@
+# Android / Gradle build outputs
+**/build/
+**/.gradle/
+**/local.properties
+**/.idea/
+*.iml
+*.apk
+*.ap_ 
+*.aab
+
+# Misc
+.DS_Store
+llmserver_github
+llmserver_github.pub
