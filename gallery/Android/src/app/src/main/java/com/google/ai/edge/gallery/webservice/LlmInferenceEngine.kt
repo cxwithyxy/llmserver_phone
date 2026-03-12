@@ -3,6 +3,10 @@ package com.google.ai.edge.gallery.webservice
 import android.content.Context
 import android.util.Log
 import com.google.ai.edge.gallery.AppLifecycleProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import com.google.ai.edge.gallery.common.processLlmResponse
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.data.BuiltInTaskId
