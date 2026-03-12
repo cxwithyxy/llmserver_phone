@@ -105,6 +105,8 @@ fun SettingsDialog(
   val availableWebModels = modelManagerViewModel.getAllDownloadedModels().filter { it.isLlm }
   var webServiceEnabled by remember { mutableStateOf(modelManagerViewModel.isWebServiceEnabledSetting()) }
   val storedModelName = remember { modelManagerViewModel.getWebServiceModelNameSetting() }
+  var downloadSite by remember { mutableStateOf(modelManagerViewModel.getDownloadSiteSetting()) }
+  var downloadSiteMenuExpanded by remember { mutableStateOf(false) }
   var selectedWebServiceModel by remember {
     mutableStateOf(
       when {
@@ -312,6 +314,48 @@ fun SettingsDialog(
             )
             Button(onClick = { modelManagerViewModel.refreshModelAllowlistFromNetwork() }) {
               Text(stringResource(R.string.settings_allowlist_refresh))
+            }
+          }
+
+          // Download site selection.
+          Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+              stringResource(R.string.settings_download_site_title),
+              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+            )
+            Text(
+              stringResource(R.string.settings_download_site_description),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(vertical = 4.dp),
+            )
+            val downloadSiteOptions = listOf(
+              "https://hf-mirror.com" to stringResource(R.string.settings_download_site_hf_mirror),
+              "https://huggingface.co" to stringResource(R.string.settings_download_site_hf),
+            )
+            val selectedDownloadSiteLabel =
+              downloadSiteOptions
+                .firstOrNull { downloadSite.startsWith(it.first) }
+                ?.second ?: stringResource(R.string.settings_download_site_hf_mirror)
+            Box {
+              OutlinedButton(onClick = { downloadSiteMenuExpanded = true }) {
+                Text(selectedDownloadSiteLabel)
+              }
+              DropdownMenu(
+                expanded = downloadSiteMenuExpanded,
+                onDismissRequest = { downloadSiteMenuExpanded = false },
+              ) {
+                downloadSiteOptions.forEach { (value, label) ->
+                  DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                      downloadSite = value
+                      modelManagerViewModel.setDownloadSite(value)
+                      downloadSiteMenuExpanded = false
+                    },
+                  )
+                }
+              }
             }
           }
 

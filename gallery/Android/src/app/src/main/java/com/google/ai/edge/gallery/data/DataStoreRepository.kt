@@ -29,6 +29,8 @@ import com.google.ai.edge.gallery.proto.UserData
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
+const val DEFAULT_DOWNLOAD_SITE = "https://hf-mirror.com"
+
 // TODO(b/423700720): Change to async (suspend) functions
 interface DataStoreRepository {
   fun saveTextInputHistory(history: List<String>)
@@ -86,6 +88,10 @@ interface DataStoreRepository {
   fun setWebServiceModelName(modelName: String)
 
   fun getWebServiceModelName(): String
+
+  fun setDownloadSite(site: String)
+
+  fun getDownloadSite(): String
 }
 
 /** Repository for managing data using Proto DataStore. */
@@ -311,5 +317,18 @@ class DefaultDataStoreRepository(
 
   override fun getWebServiceModelName(): String {
     return runBlocking { dataStore.data.first().webServiceModelName }
+  }
+
+  override fun setDownloadSite(site: String) {
+    runBlocking {
+      dataStore.updateData { settings -> settings.toBuilder().setDownloadSite(site).build() }
+    }
+  }
+
+  override fun getDownloadSite(): String {
+    return runBlocking {
+      val site = dataStore.data.first().downloadSite
+      if (site.isBlank()) DEFAULT_DOWNLOAD_SITE else site
+    }
   }
 }

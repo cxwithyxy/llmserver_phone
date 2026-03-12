@@ -85,6 +85,10 @@
   <string name="settings_allowlist_title" translatable="false">Model list</string>
   <string name="settings_allowlist_description" translatable="false">Using bundled model allowlist. Tap the button to fetch the latest remote list when needed.</string>
   <string name="settings_allowlist_refresh" translatable="false">Fetch remote allowlist</string>
+  <string name="settings_download_site_title" translatable="false">Download site</string>
+  <string name="settings_download_site_description" translatable="false">Select the host used when downloading Hugging Face models.</string>
+  <string name="settings_download_site_hf_mirror" translatable="false">hf-mirror.com (default)</string>
+  <string name="settings_download_site_hf" translatable="false">huggingface.co</string>
   <string name="edit" translatable="false">Edit</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
   <string name="expand_all" translatable="false">Expand all</string>

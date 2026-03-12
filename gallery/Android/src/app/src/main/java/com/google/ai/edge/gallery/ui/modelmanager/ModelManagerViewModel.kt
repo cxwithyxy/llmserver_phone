@@ -35,6 +35,7 @@ import com.google.ai.edge.gallery.data.CategoryInfo
 import com.google.ai.edge.gallery.data.Config
 import com.google.ai.edge.gallery.data.ConfigKeys
 import com.google.ai.edge.gallery.data.DataStoreRepository
+import com.google.ai.edge.gallery.data.DEFAULT_DOWNLOAD_SITE
 import com.google.ai.edge.gallery.data.DownloadRepository
 import com.google.ai.edge.gallery.data.EMPTY_MODEL
 import com.google.ai.edge.gallery.data.IMPORTS_DIR
@@ -79,6 +80,8 @@ private const val ALLOWLIST_BASE_URL =
   "https://raw.githubusercontent.com/google-ai-edge/gallery/refs/heads/main/model_allowlists"
 
 private const val TEST_MODEL_ALLOW_LIST = ""
+private const val HF_BASE_URL = "https://huggingface.co"
+private const val HF_MIRROR_BASE_URL = "https://hf-mirror.com"
 
 data class ModelInitializationStatus(
   val status: ModelInitializationStatusType,
@@ -137,6 +140,7 @@ data class ModelManagerUiState(
   val modelImportingUpdateTrigger: Long = 0L,
   val webServiceEnabled: Boolean = false,
   val webServiceModelName: String = "",
+  val downloadSite: String = DEFAULT_DOWNLOAD_SITE,
 ) {
   fun isModelInitialized(model: Model): Boolean {
     return modelInitializationStatus[model.name]?.status ==
@@ -278,10 +282,12 @@ constructor(
     // Delete the model files first.
     deleteModel(model = model)
 
+    val resolvedModel = model.withResolvedDownloadSite(getResolvedDownloadSite())
+
     // Start to send download request.
     downloadRepository.downloadModel(
       task = task,
-      model = model,
+      model = resolvedModel,
       onStatusUpdated = this::setDownloadStatus,
     )
   }
@@ -519,9 +525,20 @@ constructor(
     _uiState.update { it.copy(webServiceModelName = modelName) }
   }
 
+  fun getDownloadSiteSetting(): String {
+    return normalizeDownloadSite(dataStoreRepository.getDownloadSite())
+  }
+
+  fun setDownloadSite(site: String) {
+    val normalized = normalizeDownloadSite(site)
+    dataStoreRepository.setDownloadSite(normalized)
+    _uiState.update { it.copy(downloadSite = normalized) }
+  }
+
   fun getModelUrlResponse(model: Model, accessToken: String? = null): Int {
     try {
-      val url = URL(model.url)
+      val resolvedUrl = rewriteDownloadUrl(model.url, getResolvedDownloadSite())
+      val url = URL(resolvedUrl)
       val connection = url.openConnection() as HttpURLConnection
       if (accessToken != null) {
         connection.setRequestProperty("Authorization", "Bearer $accessToken")
@@ -766,9 +783,10 @@ constructor(
                 model.accessToken = tokenStatusAndData.data.accessToken
               }
               Log.d(TAG, "Sending a new download request for '${model.name}'")
+              val resolvedModel = model.withResolvedDownloadSite(getResolvedDownloadSite())
               downloadRepository.downloadModel(
                 task = task,
-                model = model,
+                model = resolvedModel,
                 onStatusUpdated = this@ModelManagerViewModel::setDownloadStatus,
               )
             }
@@ -960,6 +978,45 @@ constructor(
     }
   }
 
+  private fun getResolvedDownloadSite(): String {
+    val stored = _uiState.value.downloadSite
+    return normalizeDownloadSite(if (stored.isBlank()) DEFAULT_DOWNLOAD_SITE else stored)
+  }
+
+  private fun normalizeDownloadSite(site: String): String {
+    var normalized = site.trim()
+    if (normalized.isEmpty()) {
+      normalized = DEFAULT_DOWNLOAD_SITE
+    }
+    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+      normalized = "https://$normalized"
+    }
+    return normalized.trimEnd('/')
+  }
+
+  private fun rewriteDownloadUrl(original: String, site: String): String {
+    val normalizedSite = normalizeDownloadSite(site)
+    val prefixes = listOf(HF_BASE_URL, HF_MIRROR_BASE_URL)
+    val prefix = prefixes.firstOrNull { original.startsWith(it) }
+    return if (prefix != null) {
+      normalizedSite + original.removePrefix(prefix)
+    } else {
+      original
+    }
+  }
+
+  private fun Model.withResolvedDownloadSite(site: String): Model {
+    val newUrl = rewriteDownloadUrl(this.url, site)
+    val newExtraFiles =
+      this.extraDataFiles.map { dataFile ->
+        dataFile.copy(url = rewriteDownloadUrl(dataFile.url, site))
+      }
+    if (newUrl == this.url && newExtraFiles == this.extraDataFiles) {
+      return this
+    }
+    return this.copy(url = newUrl, extraDataFiles = newExtraFiles)
+  }
+
   private fun readModelAllowlistFromDisk(
     fileName: String = MODEL_ALLOWLIST_FILENAME
   ): ModelAllowlist? {
@@ -1002,6 +1059,7 @@ constructor(
       modelInitializationStatus = mapOf(),
       webServiceEnabled = false,
       webServiceModelName = "",
+      downloadSite = DEFAULT_DOWNLOAD_SITE,
     )
   }
 
@@ -1083,6 +1141,7 @@ constructor(
 
     val webServiceEnabled = dataStoreRepository.isWebServiceEnabled()
     val webServiceModelName = dataStoreRepository.getWebServiceModelName()
+    val downloadSite = getDownloadSiteSetting()
 
     Log.d(TAG, "model download status: $modelDownloadStatus")
     return ModelManagerUiState(
@@ -1093,6 +1152,7 @@ constructor(
       textInputHistory = textInputHistory,
       webServiceEnabled = webServiceEnabled,
       webServiceModelName = webServiceModelName,
+      downloadSite = downloadSite,
     )
   }
 
