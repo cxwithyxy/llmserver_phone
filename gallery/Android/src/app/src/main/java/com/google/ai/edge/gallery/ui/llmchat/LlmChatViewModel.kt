@@ -76,11 +76,11 @@ open class LlmChatViewModelBase() : ChatViewModel() {
       val start = System.currentTimeMillis()
 
       try {
+        val requestToken = "ui-chat-${System.currentTimeMillis()}"
         LlmChatModelHelper.runInference(
           model = model,
           input = input,
-          images = images,
-          audioClips = audioClips,
+          requestToken = requestToken,
           resultListener = { partialResult, done ->
             if (partialResult.startsWith("<ctrl")) {
               return@runInference
@@ -127,6 +127,8 @@ open class LlmChatViewModelBase() : ChatViewModel() {
             setPreparing(false)
             onError(message)
           },
+          images = images,
+          audioClips = audioClips,
         )
       } catch (e: Exception) {
         Log.e(TAG, "Error occurred while running inference", e)

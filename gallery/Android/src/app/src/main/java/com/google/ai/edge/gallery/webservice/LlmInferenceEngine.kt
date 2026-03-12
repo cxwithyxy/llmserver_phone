@@ -98,9 +98,10 @@ constructor(
           logInfo("Resetting conversation for model=${model.name}")
           resetConversation(model = model, supportImage = supportImage, supportAudio = supportAudio)
         }
-        val (result, latency) = runInference(model = model, input = trimmedMessage)
+        val requestToken = "${model.name}-${System.currentTimeMillis()}"
+        val (result, latency) = runInference(model = model, input = trimmedMessage, requestToken = requestToken)
         logInfo(
-          "Inference finished model=${model.name}, latency=${latency}ms, responseLength=${result.length}",
+          "Inference finished token=$requestToken model=${model.name}, latency=${latency}ms, responseLength=${result.length}",
         )
         LlmWebResponse(
           success = true,
@@ -204,22 +205,28 @@ constructor(
     )
   }
 
-  private suspend fun runInference(model: Model, input: String): Pair<String, Long> {
+  private suspend fun runInference(
+    model: Model,
+    input: String,
+    requestToken: String,
+  ): Pair<String, Long> {
     return withTimeout(INFERENCE_TIMEOUT_MS) {
       suspendCancellableCoroutine { continuation ->
         val builder = StringBuilder()
         val start = System.currentTimeMillis()
-        logInfo("Starting inference model=${model.name}, inputLength=${input.length}")
+        logInfo("Starting inference token=$requestToken model=${model.name}, inputLength=${input.length}")
         try {
           LlmChatModelHelper.runInference(
             model = model,
             input = input,
+            requestToken = requestToken,
             resultListener = { partial, done ->
               if (partial.startsWith("<ctrl")) {
                 return@runInference
               }
               if (partial.isNotEmpty()) {
                 builder.append(partial)
+                logDebug("token=$requestToken chunk len=${partial.length} done=$done")
               }
               if (done && !continuation.isCompleted) {
                 val latency = System.currentTimeMillis() - start
@@ -229,6 +236,7 @@ constructor(
               }
             },
             cleanUpListener = {
+              logDebug("token=$requestToken cleanUpListener invoked")
               if (!continuation.isCompleted) {
                 val latency = System.currentTimeMillis() - start
                 continuation.resume(
@@ -237,21 +245,21 @@ constructor(
               }
             },
             onError = { message ->
-              logError("Inference error model=${model.name}: $message")
+              logError("Inference error token=$requestToken model=${model.name}: $message")
               if (!continuation.isCompleted) {
                 continuation.resumeWithException(IllegalStateException(message))
               }
             },
           )
         } catch (throwable: Throwable) {
-          logError("Inference threw exception for model=${model.name}", throwable)
+          logError("Inference threw exception token=$requestToken for model=${model.name}", throwable)
           if (!continuation.isCompleted) {
             continuation.resumeWithException(throwable)
           }
         }
 
         continuation.invokeOnCancellation {
-          logInfo("Inference cancelled for model=${model.name}")
+          logInfo("Inference cancelled token=$requestToken for model=${model.name}")
           val instance = model.instance as? LlmModelInstance
           instance?.conversation?.cancelProcess()
         }

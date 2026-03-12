@@ -82,9 +82,11 @@ class LlmSingleTurnViewModel @Inject constructor() : ViewModel() {
       // Run inference.
       var firstRun = true
       var response = ""
+      val requestToken = "ui-single-${System.currentTimeMillis()}"
       LlmChatModelHelper.runInference(
         model = model,
         input = input,
+        requestToken = requestToken,
         resultListener = { partialResult, done ->
           if (firstRun) {
             setPreparing(false)

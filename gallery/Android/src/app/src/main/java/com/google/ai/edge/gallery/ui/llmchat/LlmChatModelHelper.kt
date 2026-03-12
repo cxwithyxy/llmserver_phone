@@ -227,6 +227,7 @@ object LlmChatModelHelper {
   fun runInference(
     model: Model,
     input: String,
+    requestToken: String,
     resultListener: ResultListener,
     cleanUpListener: CleanUpListener,
     onError: (message: String) -> Unit = {},
@@ -241,6 +242,8 @@ object LlmChatModelHelper {
     }
 
     val conversation = instance.conversation
+
+    Log.d(TAG, "runInference token=$requestToken model=${model.name} conversation=${conversation.hashCode()}")
 
     val contents = mutableListOf<Content>()
     for (image in images) {
@@ -258,19 +261,21 @@ object LlmChatModelHelper {
       Contents.of(contents),
       object : MessageCallback {
         override fun onMessage(message: Message) {
+          Log.d(TAG, "token=$requestToken onMessage len=${message.toString().length}")
           resultListener(message.toString(), false)
         }
 
         override fun onDone() {
+          Log.d(TAG, "token=$requestToken onDone")
           resultListener("", true)
         }
 
         override fun onError(throwable: Throwable) {
           if (throwable is CancellationException) {
-            Log.i(TAG, "The inference is cancelled.")
+            Log.i(TAG, "token=$requestToken inference cancelled by caller")
             resultListener("", true)
           } else {
-            Log.e(TAG, "onError", throwable)
+            Log.e(TAG, "token=$requestToken onError", throwable)
             onError("Error: ${throwable.message}")
           }
         }
