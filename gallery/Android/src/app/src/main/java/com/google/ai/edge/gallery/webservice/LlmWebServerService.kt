@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.ai.edge.gallery.AppLifecycleProvider
 import com.google.ai.edge.gallery.R
+import com.google.ai.edge.gallery.common.LogBuffer
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.data.DataStoreRepository
 import com.google.ai.edge.gallery.data.DownloadRepository
@@ -51,7 +52,7 @@ class LlmWebServerService : Service() {
         lifecycleProvider = lifecycleProvider,
         customTasks = customTasks,
       )
-    Log.i(TAG, "Web service created; resolved IP=$ipAddress")
+    logInfo("Web service created; resolved IP=$ipAddress")
     startForeground(NOTIFICATION_ID, createNotification())
     startServer()
   }
@@ -59,18 +60,18 @@ class LlmWebServerService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_STOP_SERVICE -> {
-        Log.i(TAG, "Received stop intent")
+        logInfo("Received stop intent")
         stopSelf()
         return START_NOT_STICKY
       }
       ACTION_RESTART_SERVICE -> {
-        Log.i(TAG, "Received restart intent")
+        logInfo("Received restart intent")
         restartServer()
         return START_STICKY
       }
     }
     if (webServer == null) {
-      Log.i(TAG, "Server reference missing; starting a new instance")
+      logInfo("Server reference missing; starting a new instance")
       startServer()
     }
     return START_STICKY
@@ -79,7 +80,7 @@ class LlmWebServerService : Service() {
   override fun onDestroy() {
     stopServer()
     inferenceEngine.dispose()
-    Log.i(TAG, "LLM web service stopped")
+    logInfo("LLM web service stopped")
     super.onDestroy()
   }
 
@@ -92,17 +93,17 @@ class LlmWebServerService : Service() {
         LlmNanoHttpServer(port = DEFAULT_PORT, requestHandler = this::handleChatRequest).apply {
           this.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
         }
-      Log.i(TAG, "LLM web service listening on ${ipAddress}:$DEFAULT_PORT")
+      logInfo("LLM web service listening on ${ipAddress}:$DEFAULT_PORT")
       updateNotification()
     } catch (error: IOException) {
-      Log.e(TAG, "Unable to start embedded server", error)
+      logError("Unable to start embedded server", error)
       stopSelf()
     }
   }
 
   private fun stopServer() {
     if (webServer != null) {
-      Log.i(TAG, "Stopping embedded server")
+      logInfo("Stopping embedded server")
     }
     webServer?.stop()
     webServer = null
@@ -110,16 +111,16 @@ class LlmWebServerService : Service() {
 
   private fun restartServer() {
     ipAddress = resolveLocalIpAddress()
-    Log.i(TAG, "Restarting server with IP=$ipAddress")
+    logInfo("Restarting server with IP=$ipAddress")
     startServer()
   }
 
   private suspend fun handleChatRequest(request: LlmWebRequest): LlmWebResponse {
-    Log.i(TAG, "Incoming /chat request reset=${request.resetConversation} requestedModel=${request.model}")
+    logInfo("Incoming /chat request reset=${request.resetConversation} requestedModel=${request.model}")
     return withWakeLock {
       val preferred = inferenceEngine.getPreferredModelName()
       val response = inferenceEngine.handleChatRequest(request = request, preferredModelName = preferred)
-      Log.i(TAG, "Request completed model=${response.model} latency=${response.latencyMs}ms")
+      logInfo("Request completed model=${response.model} latency=${response.latencyMs}ms")
       response
     }
   }
@@ -165,13 +166,13 @@ class LlmWebServerService : Service() {
       powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:WebServiceWakelock")
     wakeLock.setReferenceCounted(false)
     wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
-    Log.d(TAG, "WakeLock acquired for up to ${WAKE_LOCK_TIMEOUT_MS}ms")
+    logDebug("WakeLock acquired for up to ${WAKE_LOCK_TIMEOUT_MS}ms")
     return wakeLock
   }
 
   private fun releaseWakeLock(wakeLock: PowerManager.WakeLock?) {
     if (wakeLock?.isHeld == true) {
-      Log.d(TAG, "WakeLock released")
+      logDebug("WakeLock released")
       wakeLock.release()
     }
   }
@@ -200,9 +201,29 @@ class LlmWebServerService : Service() {
         }
       }
     } catch (error: Exception) {
-      Log.w(TAG, "Unable to resolve local IP", error)
+      logError("Unable to resolve local IP", error)
     }
     return "0.0.0.0"
+  }
+
+  private fun logInfo(message: String) {
+    Log.i(TAG, message)
+    LogBuffer.append(TAG, message)
+  }
+
+  private fun logDebug(message: String) {
+    Log.d(TAG, message)
+    LogBuffer.append(TAG, message)
+  }
+
+  private fun logError(message: String, throwable: Throwable? = null) {
+    if (throwable == null) {
+      Log.e(TAG, message)
+      LogBuffer.append(TAG, message)
+    } else {
+      Log.e(TAG, message, throwable)
+      LogBuffer.append(TAG, "$message: ${throwable.message}")
+    }
   }
 
   companion object {

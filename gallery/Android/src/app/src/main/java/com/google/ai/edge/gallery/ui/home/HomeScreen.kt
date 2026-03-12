@@ -54,9 +54,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ListAlt
+import androidx.compose.material.icons.rounded.Article
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Settings
+import com.google.ai.edge.gallery.ui.theme.ThemeSettings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -154,6 +156,7 @@ fun HomeScreen(
 ) {
   val uiState by modelManagerViewModel.uiState.collectAsState()
   var showSettingsDialog by remember { mutableStateOf(false) }
+  var showLogsDialog by remember { mutableStateOf(false) }
   var showTosDialog by remember { mutableStateOf(!tosViewModel.getIsTosAccepted()) }
   val scope = rememberCoroutineScope()
   val context = LocalContext.current
@@ -311,6 +314,27 @@ fun HomeScreen(
                     ),
                 )
               }
+              Spacer(modifier = Modifier.height(16.dp))
+              Row(modifier = Modifier.fillMaxWidth()) {
+                SquareDrawerItem(
+                  label = stringResource(R.string.drawer_logs_label),
+                  description = stringResource(R.string.drawer_logs_description),
+                  icon = Icons.Rounded.Article,
+                  onClick = {
+                    showLogsDialog = true
+                    scope.launch { drawerState.close() }
+                  },
+                  modifier = Modifier.weight(1f),
+                  iconBrush =
+                    linearGradient(
+                      colors =
+                        listOf(
+                          MaterialTheme.customColors.taskBgGradientColors[0][0],
+                          MaterialTheme.customColors.taskBgGradientColors[0][1],
+                        )
+                    ),
+                )
+              }
             }
           }
         },
@@ -440,10 +464,14 @@ fun HomeScreen(
   // Settings dialog.
   if (showSettingsDialog) {
     SettingsDialog(
-      curThemeOverride = modelManagerViewModel.readThemeOverride(),
+      curThemeOverride = ThemeSettings.themeOverride.value,
       modelManagerViewModel = modelManagerViewModel,
       onDismissed = { showSettingsDialog = false },
     )
+  }
+
+  if (showLogsDialog) {
+    LogsPanel(onDismissed = { showLogsDialog = false })
   }
 
   if (uiState.loadingModelAllowlistError.isNotEmpty()) {

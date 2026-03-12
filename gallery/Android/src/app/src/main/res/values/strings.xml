@@ -73,6 +73,8 @@
   <string name="drawer_settings_description" translatable="false">Manage application settings</string>
   <string name="drawer_models_label" translatable="false">Models</string>
   <string name="drawer_models_description" translatable="false">Browse, try, and benchmark models</string>
+  <string name="drawer_logs_label" translatable="false">Logs</string>
+  <string name="drawer_logs_description" translatable="false">View recent service logs</string>
   <string name="web_service_notification_channel_name" translatable="false">LLM Web Service</string>
   <string name="web_service_notification_title" translatable="false">llmserver web service</string>
   <string name="web_service_notification_content" translatable="false">Serving at %1$s:%2$d</string>
@@ -93,6 +95,11 @@
   <string name="settings_web_service_accelerator_description" translatable="false">Pick CPU or GPU for the embedded HTTP service. GPU requires compatible models and devices.</string>
   <string name="settings_web_service_accelerator_cpu" translatable="false">CPU</string>
   <string name="settings_web_service_accelerator_gpu" translatable="false">GPU</string>
+  <string name="logs_dialog_title" translatable="false">Service logs</string>
+  <string name="logs_dialog_copy_all" translatable="false">Copy all</string>
+  <string name="logs_dialog_clear" translatable="false">Clear</string>
+  <string name="logs_dialog_empty" translatable="false">No logs yet</string>
+  <string name="logs_dialog_close" translatable="false">Close</string>
   <string name="edit" translatable="false">Edit</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
   <string name="expand_all" translatable="false">Expand all</string>

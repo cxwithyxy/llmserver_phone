@@ -3,6 +3,7 @@ package com.google.ai.edge.gallery.webservice
 import android.content.Context
 import android.util.Log
 import com.google.ai.edge.gallery.AppLifecycleProvider
+import com.google.ai.edge.gallery.common.LogBuffer
 import com.google.ai.edge.gallery.common.processLlmResponse
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.data.Accelerator
@@ -290,17 +291,21 @@ constructor(
 
   private fun logInfo(message: String) {
     Log.i(TAG, message)
+    LogBuffer.append(TAG, message)
   }
 
   private fun logDebug(message: String) {
     Log.d(TAG, message)
+    LogBuffer.append(TAG, message)
   }
 
   private fun logError(message: String, throwable: Throwable? = null) {
     if (throwable == null) {
       Log.e(TAG, message)
+      LogBuffer.append(TAG, message)
     } else {
       Log.e(TAG, message, throwable)
+      LogBuffer.append(TAG, "$message: ${throwable.message}")
     }
   }
 
