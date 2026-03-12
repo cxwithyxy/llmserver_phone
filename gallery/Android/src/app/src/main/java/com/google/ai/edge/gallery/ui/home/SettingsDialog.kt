@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.google.ai.edge.gallery.BuildConfig
 import com.google.ai.edge.gallery.R
+import com.google.ai.edge.gallery.data.Accelerator
 import com.google.ai.edge.gallery.proto.Theme
 import com.google.ai.edge.gallery.ui.common.ClickableLink
 import com.google.ai.edge.gallery.ui.common.tos.AppTosDialog
@@ -107,6 +108,10 @@ fun SettingsDialog(
   val storedModelName = remember { modelManagerViewModel.getWebServiceModelNameSetting() }
   var downloadSite by remember { mutableStateOf(modelManagerViewModel.getDownloadSiteSetting()) }
   var downloadSiteMenuExpanded by remember { mutableStateOf(false) }
+  var webServiceAccelerator by remember {
+    mutableStateOf(modelManagerViewModel.getWebServiceAcceleratorSetting())
+  }
+  var acceleratorMenuExpanded by remember { mutableStateOf(false) }
   var selectedWebServiceModel by remember {
     mutableStateOf(
       when {
@@ -292,6 +297,51 @@ fun SettingsDialog(
                 }
                 Text(
                   stringResource(R.string.settings_web_service_restart_notice),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.padding(top = 4.dp),
+                )
+
+                Text(
+                  stringResource(R.string.settings_web_service_accelerator_label),
+                  style =
+                    MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                  modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+                val acceleratorOptions = listOf(
+                  Accelerator.CPU.label to
+                    stringResource(R.string.settings_web_service_accelerator_cpu),
+                  Accelerator.GPU.label to
+                    stringResource(R.string.settings_web_service_accelerator_gpu),
+                )
+                val selectedAcceleratorLabel =
+                  acceleratorOptions
+                    .firstOrNull {
+                      it.first.equals(webServiceAccelerator, ignoreCase = true)
+                    }
+                    ?.second ?: stringResource(R.string.settings_web_service_accelerator_cpu)
+                Box {
+                  OutlinedButton(onClick = { acceleratorMenuExpanded = true }) {
+                    Text(selectedAcceleratorLabel)
+                  }
+                  DropdownMenu(
+                    expanded = acceleratorMenuExpanded,
+                    onDismissRequest = { acceleratorMenuExpanded = false },
+                  ) {
+                    acceleratorOptions.forEach { (value, label) ->
+                      DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                          webServiceAccelerator = value
+                          modelManagerViewModel.setWebServiceAccelerator(value)
+                          acceleratorMenuExpanded = false
+                        },
+                      )
+                    }
+                  }
+                }
+                Text(
+                  stringResource(R.string.settings_web_service_accelerator_description),
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   modifier = Modifier.padding(top = 4.dp),

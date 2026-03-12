@@ -79,6 +79,7 @@ message Settings {
   bool web_service_enabled = 10;
   string web_service_model_name = 11;
   string download_site = 12;
+  string web_service_accelerator = 13;
 }
 
 message UserData {

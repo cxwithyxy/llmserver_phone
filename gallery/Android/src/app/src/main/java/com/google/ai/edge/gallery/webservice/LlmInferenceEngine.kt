@@ -3,15 +3,15 @@ package com.google.ai.edge.gallery.webservice
 import android.content.Context
 import android.util.Log
 import com.google.ai.edge.gallery.AppLifecycleProvider
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import com.google.ai.edge.gallery.common.processLlmResponse
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
+import com.google.ai.edge.gallery.data.Accelerator
 import com.google.ai.edge.gallery.data.BuiltInTaskId
+import com.google.ai.edge.gallery.data.ConfigKeys
 import com.google.ai.edge.gallery.data.DataStoreRepository
+import com.google.ai.edge.gallery.data.DEFAULT_WEB_SERVICE_ACCELERATOR
 import com.google.ai.edge.gallery.data.DownloadRepository
+import com.google.ai.edge.gallery.data.SegmentedButtonConfig
 import com.google.ai.edge.gallery.data.EMPTY_MODEL
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.ModelDownloadStatusType
@@ -20,11 +20,16 @@ import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
 import com.google.ai.edge.gallery.ui.llmchat.LlmModelInstance
 import com.google.ai.edge.gallery.ui.modelmanager.ModelInitializationStatusType
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -91,6 +96,9 @@ constructor(
     if (!model.isLlm) {
       error("Model ${model.name} is not an LLM model")
     }
+
+    val acceleratorPreference = dataStoreRepository.getWebServiceAccelerator()
+    applyAcceleratorPreference(model, acceleratorPreference)
 
     val supportImage = model.llmSupportImage && task.id == BuiltInTaskId.LLM_ASK_IMAGE
     val supportAudio = model.llmSupportAudio && task.id == BuiltInTaskId.LLM_ASK_AUDIO
@@ -313,6 +321,31 @@ constructor(
     fun dispose() {
       super.onCleared()
     }
+  }
+
+  private fun applyAcceleratorPreference(model: Model, preferenceLabel: String?) {
+    val config =
+      model.configs.firstOrNull { it.key == ConfigKeys.ACCELERATOR } as? SegmentedButtonConfig
+        ?: return
+    if (config.options.isEmpty()) {
+      return
+    }
+    val desired =
+      preferenceLabel?.ifBlank { DEFAULT_WEB_SERVICE_ACCELERATOR }
+        ?: DEFAULT_WEB_SERVICE_ACCELERATOR
+    val resolved =
+      config.options.firstOrNull { it.equals(desired, ignoreCase = true) }
+        ?: config.options.firstOrNull { it.equals(DEFAULT_WEB_SERVICE_ACCELERATOR, ignoreCase = true) }
+        ?: config.options.first()
+    val current = model.configValues[ConfigKeys.ACCELERATOR.label] as? String
+    if (current?.equals(resolved, ignoreCase = true) == true) {
+      return
+    }
+    val newValues = model.configValues.toMutableMap()
+    newValues[ConfigKeys.ACCELERATOR.label] = resolved
+    model.prevConfigValues = model.configValues
+    model.configValues = newValues
+    logInfo("Applied accelerator=$resolved for model=${model.name}")
   }
 
   companion object {

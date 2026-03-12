@@ -89,6 +89,10 @@
   <string name="settings_download_site_description" translatable="false">Select the host used when downloading Hugging Face models.</string>
   <string name="settings_download_site_hf_mirror" translatable="false">hf-mirror.com (default)</string>
   <string name="settings_download_site_hf" translatable="false">huggingface.co</string>
+  <string name="settings_web_service_accelerator_label" translatable="false">Web service accelerator</string>
+  <string name="settings_web_service_accelerator_description" translatable="false">Pick CPU or GPU for the embedded HTTP service. GPU requires compatible models and devices.</string>
+  <string name="settings_web_service_accelerator_cpu" translatable="false">CPU</string>
+  <string name="settings_web_service_accelerator_gpu" translatable="false">GPU</string>
   <string name="edit" translatable="false">Edit</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
   <string name="expand_all" translatable="false">Expand all</string>

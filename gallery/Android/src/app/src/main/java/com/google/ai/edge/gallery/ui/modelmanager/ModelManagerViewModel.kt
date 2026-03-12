@@ -36,6 +36,7 @@ import com.google.ai.edge.gallery.data.Config
 import com.google.ai.edge.gallery.data.ConfigKeys
 import com.google.ai.edge.gallery.data.DataStoreRepository
 import com.google.ai.edge.gallery.data.DEFAULT_DOWNLOAD_SITE
+import com.google.ai.edge.gallery.data.DEFAULT_WEB_SERVICE_ACCELERATOR
 import com.google.ai.edge.gallery.data.DownloadRepository
 import com.google.ai.edge.gallery.data.EMPTY_MODEL
 import com.google.ai.edge.gallery.data.IMPORTS_DIR
@@ -141,6 +142,7 @@ data class ModelManagerUiState(
   val webServiceEnabled: Boolean = false,
   val webServiceModelName: String = "",
   val downloadSite: String = DEFAULT_DOWNLOAD_SITE,
+  val webServiceAccelerator: String = DEFAULT_WEB_SERVICE_ACCELERATOR,
 ) {
   fun isModelInitialized(model: Model): Boolean {
     return modelInitializationStatus[model.name]?.status ==
@@ -196,6 +198,15 @@ constructor(
 
   val authService = AuthorizationService(context)
   var curAccessToken: String = ""
+
+  init {
+    _uiState.update {
+      it.copy(
+        downloadSite = getDownloadSiteSetting(),
+        webServiceAccelerator = dataStoreRepository.getWebServiceAccelerator(),
+      )
+    }
+  }
 
   override fun onCleared() {
     authService.dispose()
@@ -533,6 +544,16 @@ constructor(
     val normalized = normalizeDownloadSite(site)
     dataStoreRepository.setDownloadSite(normalized)
     _uiState.update { it.copy(downloadSite = normalized) }
+  }
+
+  fun getWebServiceAcceleratorSetting(): String {
+    return dataStoreRepository.getWebServiceAccelerator()
+  }
+
+  fun setWebServiceAccelerator(acceleratorLabel: String) {
+    val normalized = acceleratorLabel.ifBlank { DEFAULT_WEB_SERVICE_ACCELERATOR }
+    dataStoreRepository.setWebServiceAccelerator(normalized)
+    _uiState.update { it.copy(webServiceAccelerator = normalized) }
   }
 
   fun getModelUrlResponse(model: Model, accessToken: String? = null): Int {
@@ -1060,6 +1081,7 @@ constructor(
       webServiceEnabled = false,
       webServiceModelName = "",
       downloadSite = DEFAULT_DOWNLOAD_SITE,
+      webServiceAccelerator = DEFAULT_WEB_SERVICE_ACCELERATOR,
     )
   }
 
@@ -1142,6 +1164,7 @@ constructor(
     val webServiceEnabled = dataStoreRepository.isWebServiceEnabled()
     val webServiceModelName = dataStoreRepository.getWebServiceModelName()
     val downloadSite = getDownloadSiteSetting()
+    val webServiceAccelerator = dataStoreRepository.getWebServiceAccelerator()
 
     Log.d(TAG, "model download status: $modelDownloadStatus")
     return ModelManagerUiState(
@@ -1153,6 +1176,7 @@ constructor(
       webServiceEnabled = webServiceEnabled,
       webServiceModelName = webServiceModelName,
       downloadSite = downloadSite,
+      webServiceAccelerator = webServiceAccelerator,
     )
   }
 

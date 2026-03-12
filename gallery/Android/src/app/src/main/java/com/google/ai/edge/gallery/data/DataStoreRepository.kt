@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 const val DEFAULT_DOWNLOAD_SITE = "https://hf-mirror.com"
+val DEFAULT_WEB_SERVICE_ACCELERATOR = Accelerator.CPU.label
 
 // TODO(b/423700720): Change to async (suspend) functions
 interface DataStoreRepository {
@@ -92,6 +93,10 @@ interface DataStoreRepository {
   fun setDownloadSite(site: String)
 
   fun getDownloadSite(): String
+
+  fun setWebServiceAccelerator(acceleratorLabel: String)
+
+  fun getWebServiceAccelerator(): String
 }
 
 /** Repository for managing data using Proto DataStore. */
@@ -329,6 +334,21 @@ class DefaultDataStoreRepository(
     return runBlocking {
       val site = dataStore.data.first().downloadSite
       if (site.isBlank()) DEFAULT_DOWNLOAD_SITE else site
+    }
+  }
+
+  override fun setWebServiceAccelerator(acceleratorLabel: String) {
+    runBlocking {
+      dataStore.updateData {
+        it.toBuilder().setWebServiceAccelerator(acceleratorLabel).build()
+      }
+    }
+  }
+
+  override fun getWebServiceAccelerator(): String {
+    return runBlocking {
+      val accelerator = dataStore.data.first().webServiceAccelerator
+      if (accelerator.isBlank()) DEFAULT_WEB_SERVICE_ACCELERATOR else accelerator
     }
   }
 }
