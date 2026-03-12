@@ -298,6 +298,23 @@ fun SettingsDialog(
             }
           }
 
+          // Allowlist controls.
+          Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+              stringResource(R.string.settings_allowlist_title),
+              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+            )
+            Text(
+              stringResource(R.string.settings_allowlist_description),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(vertical = 4.dp),
+            )
+            Button(onClick = { modelManagerViewModel.refreshModelAllowlistFromNetwork() }) {
+              Text(stringResource(R.string.settings_allowlist_refresh))
+            }
+          }
+
           // HF Token management.
           Column(
             modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},

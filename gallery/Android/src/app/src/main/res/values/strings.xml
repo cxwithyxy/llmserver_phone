@@ -82,6 +82,9 @@
   <string name="settings_web_service_model_label" translatable="false">Default model</string>
   <string name="settings_web_service_no_model" translatable="false">No downloaded LLM models</string>
   <string name="settings_web_service_restart_notice" translatable="false">Changing the model restarts the service.</string>
+  <string name="settings_allowlist_title" translatable="false">Model list</string>
+  <string name="settings_allowlist_description" translatable="false">Using bundled model allowlist. Tap the button to fetch the latest remote list when needed.</string>
+  <string name="settings_allowlist_refresh" translatable="false">Fetch remote allowlist</string>
   <string name="edit" translatable="false">Edit</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
   <string name="expand_all" translatable="false">Expand all</string>

@@ -787,14 +787,11 @@ constructor(
 
     viewModelScope.launch(Dispatchers.IO) {
       try {
-        // Load model allowlist json.
         var modelAllowlist: ModelAllowlist? = null
 
-        // Try to read the test allowlist first.
         Log.d(TAG, "Loading test model allowlist.")
         modelAllowlist = readModelAllowlistFromDisk(fileName = MODEL_ALLOWLIST_TEST_FILENAME)
 
-        // Local test only.
         if (TEST_MODEL_ALLOW_LIST.isNotEmpty()) {
           Log.d(TAG, "Loading local model allowlist for testing.")
           val gson = Gson()
@@ -806,98 +803,32 @@ constructor(
         }
 
         if (modelAllowlist == null) {
-          // Load from github.
-          val url = getAllowlistUrl()
-          Log.d(TAG, "Loading model allowlist from internet. Url: $url")
-          val data = getJsonResponse<ModelAllowlist>(url = url)
-          modelAllowlist = data?.jsonObj
+          modelAllowlist = readModelAllowlistFromDisk()
+        }
 
-          if (modelAllowlist == null) {
-            Log.w(TAG, "Failed to load model allowlist from internet. Trying to load it from disk")
-            modelAllowlist = readModelAllowlistFromDisk()
-          } else {
-            Log.d(TAG, "Done: loading model allowlist from internet")
-            saveModelAllowlistToDisk(modelAllowlistContent = data?.textContent ?: "{}")
-          }
+        if (modelAllowlist == null) {
+          modelAllowlist = readModelAllowlistFromAssets()
         }
 
         if (modelAllowlist == null) {
           _uiState.update {
-            uiState.value.copy(loadingModelAllowlistError = "Failed to load model list")
+            uiState.value.copy(
+              loadingModelAllowlist = false,
+              loadingModelAllowlistError = "Failed to load model list",
+            )
           }
           return@launch
         }
 
-        Log.d(TAG, "Allowlist: $modelAllowlist")
-
-        // Convert models in the allowlist.
-        val curTasks = getActiveCustomTasks().map { it.task }
-        val nameToModel = mutableMapOf<String, Model>()
-        for (allowedModel in modelAllowlist.models) {
-          if (allowedModel.disabled == true) {
-            continue
-          }
-
-          // Ignore the allowedModel if its accelerator is only npu and this device's soc is not in
-          // its socToModelFiles.
-          val accelerators = allowedModel.defaultConfig.accelerators ?: ""
-          val acceleratorList = accelerators.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-          if (acceleratorList.size == 1 && acceleratorList[0] == "npu") {
-            val socToModelFiles = allowedModel.socToModelFiles
-            if (socToModelFiles != null && !socToModelFiles.containsKey(SOC)) {
-              Log.d(
-                TAG,
-                "Ignoring model '${allowedModel.name}' because it's NPU-only and not supported on SOC: $SOC",
-              )
-              continue
-            }
-          }
-
-          val model = allowedModel.toModel()
-          nameToModel.put(model.name, model)
-          for (taskType in allowedModel.taskTypes) {
-            val task = curTasks.find { it.id == taskType }
-            task?.models?.add(model)
-
-            if (task?.id == BuiltInTaskId.LLM_TINY_GARDEN) {
-              val newConfigs = model.configs.toMutableList()
-              newConfigs.add(RESET_CONVERSATION_TURN_COUNT_CONFIG)
-              model.configs = newConfigs
-            }
-          }
-        }
-
-        // Find models from allowlist if a task's `modelNames` field is not empty.
-        for (task in curTasks) {
-          if (task.modelNames.isNotEmpty()) {
-            for (modelName in task.modelNames) {
-              val model = nameToModel[modelName]
-              if (model == null) {
-                Log.w(TAG, "Model '${modelName}' in task '${task.label}' not found in allowlist.")
-                continue
-              }
-              task.models.add(model)
-            }
-          }
-        }
-
-        // Process all tasks.
-        processTasks()
-
-        // Update UI state.
-        _uiState.update {
-          createUiState()
-            .copy(
-              loadingModelAllowlist = false,
-              tasks = curTasks,
-              tasksByCategory = groupTasksByCategory(),
-            )
-        }
-
-        // Process pending downloads.
-        processPendingDownloads()
+        populateModelAllowlist(modelAllowlist)
       } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "loadModelAllowlist failed", e)
+        _uiState.update {
+          uiState.value.copy(
+            loadingModelAllowlist = false,
+            loadingModelAllowlistError = "Failed to load model list",
+          )
+        }
       }
     }
   }
@@ -916,8 +847,93 @@ constructor(
     }
   }
 
+  fun refreshModelAllowlistFromNetwork() {
+    _uiState.update {
+      uiState.value.copy(loadingModelAllowlist = true, loadingModelAllowlistError = "")
+    }
+    viewModelScope.launch(Dispatchers.IO) {
+      val result = downloadModelAllowlistFromNetwork()
+      if (result == null) {
+        _uiState.update {
+          uiState.value.copy(
+            loadingModelAllowlist = false,
+            loadingModelAllowlistError = "Failed to fetch model list",
+          )
+        }
+        return@launch
+      }
+      val (allowlist, content) = result
+      saveModelAllowlistToDisk(modelAllowlistContent = content)
+      populateModelAllowlist(allowlist)
+    }
+  }
+
   fun setAppInForeground(foreground: Boolean) {
     lifecycleProvider.isAppInForeground = foreground
+  }
+
+  private fun populateModelAllowlist(modelAllowlist: ModelAllowlist) {
+    Log.d(TAG, "Allowlist: $modelAllowlist")
+
+    val curTasks = getActiveCustomTasks().map { it.task }
+    val nameToModel = mutableMapOf<String, Model>()
+    for (allowedModel in modelAllowlist.models) {
+      if (allowedModel.disabled == true) {
+        continue
+      }
+
+      val accelerators = allowedModel.defaultConfig.accelerators ?: ""
+      val acceleratorList = accelerators.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+      if (acceleratorList.size == 1 && acceleratorList[0] == "npu") {
+        val socToModelFiles = allowedModel.socToModelFiles
+        if (socToModelFiles != null && !socToModelFiles.containsKey(SOC)) {
+          Log.d(
+            TAG,
+            "Ignoring model '${allowedModel.name}' because it's NPU-only and not supported on SOC: $SOC",
+          )
+          continue
+        }
+      }
+
+      val model = allowedModel.toModel()
+      nameToModel[model.name] = model
+      for (taskType in allowedModel.taskTypes) {
+        val task = curTasks.find { it.id == taskType }
+        task?.models?.add(model)
+
+        if (task?.id == BuiltInTaskId.LLM_TINY_GARDEN) {
+          val newConfigs = model.configs.toMutableList()
+          newConfigs.add(RESET_CONVERSATION_TURN_COUNT_CONFIG)
+          model.configs = newConfigs
+        }
+      }
+    }
+
+    for (task in curTasks) {
+      if (task.modelNames.isNotEmpty()) {
+        for (modelName in task.modelNames) {
+          val model = nameToModel[modelName]
+          if (model == null) {
+            Log.w(TAG, "Model '${modelName}' in task '${task.label}' not found in allowlist.")
+            continue
+          }
+          task.models.add(model)
+        }
+      }
+    }
+
+    processTasks()
+
+    _uiState.update {
+      createUiState()
+        .copy(
+          loadingModelAllowlist = false,
+          tasks = curTasks,
+          tasksByCategory = groupTasksByCategory(),
+        )
+    }
+
+    processPendingDownloads()
   }
 
   private fun saveModelAllowlistToDisk(modelAllowlistContent: String) {
@@ -928,6 +944,19 @@ constructor(
       Log.d(TAG, "Done: saving model allowlist to disk.")
     } catch (e: Exception) {
       Log.e(TAG, "failed to write model allowlist to disk", e)
+    }
+  }
+
+  private fun readModelAllowlistFromAssets(): ModelAllowlist? {
+    return try {
+      Log.d(TAG, "Reading model allowlist from bundled assets")
+      context.assets.open(MODEL_ALLOWLIST_FILENAME).bufferedReader().use { reader ->
+        val content = reader.readText()
+        Gson().fromJson(content, ModelAllowlist::class.java)
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "failed to read model allowlist from assets", e)
+      null
     }
   }
 
@@ -974,6 +1003,24 @@ constructor(
       webServiceEnabled = false,
       webServiceModelName = "",
     )
+  }
+
+  private fun downloadModelAllowlistFromNetwork(): Pair<ModelAllowlist, String>? {
+    return try {
+      val url = getAllowlistUrl()
+      Log.d(TAG, "Fetching model allowlist from internet. Url: $url")
+      val response = getJsonResponse<ModelAllowlist>(url = url)
+      val modelAllowlist = response?.jsonObj
+      if (modelAllowlist != null) {
+        val content = response.textContent ?: Gson().toJson(modelAllowlist)
+        modelAllowlist to content
+      } else {
+        null
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to download allowlist", e)
+      null
+    }
   }
 
   private fun createUiState(): ModelManagerUiState {
