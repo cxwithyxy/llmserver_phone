@@ -41,8 +41,14 @@ import com.google.ai.edge.litertlm.MessageCallback
 import com.google.ai.edge.litertlm.SamplerConfig
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val TAG = "AGLlmChatModelHelper"
+private const val INFERENCE_WATCHDOG_MS = 60_000L
 
 typealias ResultListener = (partialResult: String, done: Boolean) -> Unit
 
@@ -245,6 +251,30 @@ object LlmChatModelHelper {
 
     Log.d(TAG, "runInference token=$requestToken model=${model.name} conversation=${conversation.hashCode()}")
 
+    fun startWatchdog(): Job {
+      return CoroutineScope(Dispatchers.Default).launch {
+        delay(INFERENCE_WATCHDOG_MS)
+        Log.e(
+          TAG,
+          "token=$requestToken watchdog fired after ${INFERENCE_WATCHDOG_MS}ms; cancelling conversation",
+        )
+        try {
+          conversation.cancelProcess()
+        } catch (error: Exception) {
+          Log.e(TAG, "token=$requestToken failed to cancel conversation", error)
+        }
+        onError("Inference timed out after ${INFERENCE_WATCHDOG_MS}ms")
+        resultListener("", true)
+      }
+    }
+
+    var watchdogJob = startWatchdog()
+
+    fun resetWatchdog() {
+      watchdogJob.cancel()
+      watchdogJob = startWatchdog()
+    }
+
     val contents = mutableListOf<Content>()
     for (image in images) {
       contents.add(Content.ImageBytes(image.toPngByteArray()))
@@ -262,15 +292,18 @@ object LlmChatModelHelper {
       object : MessageCallback {
         override fun onMessage(message: Message) {
           Log.d(TAG, "token=$requestToken onMessage len=${message.toString().length}")
+          resetWatchdog()
           resultListener(message.toString(), false)
         }
 
         override fun onDone() {
           Log.d(TAG, "token=$requestToken onDone")
+          watchdogJob.cancel()
           resultListener("", true)
         }
 
         override fun onError(throwable: Throwable) {
+          watchdogJob.cancel()
           if (throwable is CancellationException) {
             Log.i(TAG, "token=$requestToken inference cancelled by caller")
             resultListener("", true)
