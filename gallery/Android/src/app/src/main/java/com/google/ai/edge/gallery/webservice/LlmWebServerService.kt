@@ -51,6 +51,7 @@ class LlmWebServerService : Service() {
         lifecycleProvider = lifecycleProvider,
         customTasks = customTasks,
       )
+    Log.i(TAG, "Web service created; resolved IP=$ipAddress")
     startForeground(NOTIFICATION_ID, createNotification())
     startServer()
   }
@@ -58,15 +59,18 @@ class LlmWebServerService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_STOP_SERVICE -> {
+        Log.i(TAG, "Received stop intent")
         stopSelf()
         return START_NOT_STICKY
       }
       ACTION_RESTART_SERVICE -> {
+        Log.i(TAG, "Received restart intent")
         restartServer()
         return START_STICKY
       }
     }
     if (webServer == null) {
+      Log.i(TAG, "Server reference missing; starting a new instance")
       startServer()
     }
     return START_STICKY
@@ -97,19 +101,26 @@ class LlmWebServerService : Service() {
   }
 
   private fun stopServer() {
+    if (webServer != null) {
+      Log.i(TAG, "Stopping embedded server")
+    }
     webServer?.stop()
     webServer = null
   }
 
   private fun restartServer() {
     ipAddress = resolveLocalIpAddress()
+    Log.i(TAG, "Restarting server with IP=$ipAddress")
     startServer()
   }
 
   private suspend fun handleChatRequest(request: LlmWebRequest): LlmWebResponse {
+    Log.i(TAG, "Incoming /chat request reset=${request.resetConversation} requestedModel=${request.model}")
     return withWakeLock {
       val preferred = inferenceEngine.getPreferredModelName()
-      inferenceEngine.handleChatRequest(request = request, preferredModelName = preferred)
+      val response = inferenceEngine.handleChatRequest(request = request, preferredModelName = preferred)
+      Log.i(TAG, "Request completed model=${response.model} latency=${response.latencyMs}ms")
+      response
     }
   }
 
@@ -154,11 +165,13 @@ class LlmWebServerService : Service() {
       powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:WebServiceWakelock")
     wakeLock.setReferenceCounted(false)
     wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+    Log.d(TAG, "WakeLock acquired for up to ${WAKE_LOCK_TIMEOUT_MS}ms")
     return wakeLock
   }
 
   private fun releaseWakeLock(wakeLock: PowerManager.WakeLock?) {
     if (wakeLock?.isHeld == true) {
+      Log.d(TAG, "WakeLock released")
       wakeLock.release()
     }
   }

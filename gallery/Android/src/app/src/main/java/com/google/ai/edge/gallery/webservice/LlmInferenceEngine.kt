@@ -1,6 +1,7 @@
 package com.google.ai.edge.gallery.webservice
 
 import android.content.Context
+import android.util.Log
 import com.google.ai.edge.gallery.AppLifecycleProvider
 import com.google.ai.edge.gallery.common.processLlmResponse
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
@@ -52,6 +53,7 @@ constructor(
   private val textTaskPriority = listOf(BuiltInTaskId.LLM_CHAT, BuiltInTaskId.LLM_PROMPT_LAB)
 
   init {
+    logInfo("Initializing inference engine; loading model allowlist")
     modelManagerViewModel.loadModelAllowlist()
   }
 
@@ -62,11 +64,16 @@ constructor(
     val trimmedMessage = request.message?.trim().orEmpty()
     require(trimmedMessage.isNotEmpty()) { "message must not be empty" }
 
+    logInfo(
+      "handleChatRequest messageLength=${trimmedMessage.length}, requestedModel=${request.model}, preferredModel=$preferredModelName",
+    )
+
     awaitAllowlistReady()
 
     val model = resolveModel(requestedModelName = request.model ?: preferredModelName)
     val conversationId =
       request.conversationId ?: "$DEFAULT_CONVERSATION_PREFIX-${conversationCounter.incrementAndGet()}"
+    logInfo("Selected model=${model.name}, conversationId=$conversationId")
 
     val task = findTaskForModel(model)
       ?: error("Unable to resolve a task for model ${model.name}")
@@ -88,9 +95,13 @@ constructor(
       mutex.withLock {
         ensureModelReady(task, model)
         if (request.resetConversation == true) {
+          logInfo("Resetting conversation for model=${model.name}")
           resetConversation(model = model, supportImage = supportImage, supportAudio = supportAudio)
         }
         val (result, latency) = runInference(model = model, input = trimmedMessage)
+        logInfo(
+          "Inference finished model=${model.name}, latency=${latency}ms, responseLength=${result.length}",
+        )
         LlmWebResponse(
           success = true,
           model = model.name,
@@ -112,21 +123,27 @@ constructor(
     if (errorMessage.isNotEmpty()) {
       error("Failed to load model list: $errorMessage")
     }
+    logDebug("Model allowlist ready; total=${modelManagerViewModel.uiState.value.tasks.size} tasks")
   }
 
   private fun resolveModel(requestedModelName: String?): Model {
     val explicitModel = requestedModelName?.let { modelManagerViewModel.getModelByName(it) }
     if (explicitModel != null) {
+      logDebug("resolveModel matched explicit request: $requestedModelName")
       return explicitModel
     }
 
     val selectedModel = modelManagerViewModel.uiState.value.selectedModel
     if (selectedModel.name.isNotEmpty() && selectedModel != EMPTY_MODEL) {
+      logDebug("resolveModel using selected model: ${selectedModel.name}")
       return selectedModel
     }
 
-    return modelManagerViewModel.getAllDownloadedModels().firstOrNull()
-      ?: error("No downloaded LLM model is available. Please download one in the app first.")
+    val fallback =
+      modelManagerViewModel.getAllDownloadedModels().firstOrNull()
+        ?: error("No downloaded LLM model is available. Please download one in the app first.")
+    logDebug("resolveModel fallback to downloaded model: ${fallback.name}")
+    return fallback
   }
 
   private fun findTaskForModel(model: Model): Task? {
@@ -156,18 +173,22 @@ constructor(
 
   private suspend fun ensureModelReady(task: Task, model: Model) {
     if (model.instance != null) {
+      logDebug("Model ${model.name} already initialized; reusing instance")
       return
     }
+    logInfo("Initializing model ${model.name} for task=${task.id}")
     modelManagerViewModel.initializeModel(context = context, task = task, model = model)
     withTimeout(INIT_TIMEOUT_MS) {
       while (true) {
         val status = modelManagerViewModel.uiState.value.modelInitializationStatus[model.name]
         if (model.instance != null &&
             status?.status == ModelInitializationStatusType.INITIALIZED) {
+          logInfo("Model ${model.name} initialized successfully")
           return@withTimeout
         }
         if (status?.status == ModelInitializationStatusType.ERROR) {
           val message = status.error.ifEmpty { "Unknown initialization error" }
+          logError("Model ${model.name} initialization failed: $message")
           error(message)
         }
         delay(200)
@@ -188,6 +209,7 @@ constructor(
       suspendCancellableCoroutine { continuation ->
         val builder = StringBuilder()
         val start = System.currentTimeMillis()
+        logInfo("Starting inference model=${model.name}, inputLength=${input.length}")
         try {
           LlmChatModelHelper.runInference(
             model = model,
@@ -215,18 +237,21 @@ constructor(
               }
             },
             onError = { message ->
+              logError("Inference error model=${model.name}: $message")
               if (!continuation.isCompleted) {
                 continuation.resumeWithException(IllegalStateException(message))
               }
             },
           )
         } catch (throwable: Throwable) {
+          logError("Inference threw exception for model=${model.name}", throwable)
           if (!continuation.isCompleted) {
             continuation.resumeWithException(throwable)
           }
         }
 
         continuation.invokeOnCancellation {
+          logInfo("Inference cancelled for model=${model.name}")
           val instance = model.instance as? LlmModelInstance
           instance?.conversation?.cancelProcess()
         }
@@ -235,11 +260,28 @@ constructor(
   }
 
   fun dispose() {
+    logInfo("Disposing inference engine")
     modelManagerViewModel.dispose()
   }
 
   fun getPreferredModelName(): String {
     return dataStoreRepository.getWebServiceModelName()
+  }
+
+  private fun logInfo(message: String) {
+    Log.i(TAG, message)
+  }
+
+  private fun logDebug(message: String) {
+    Log.d(TAG, message)
+  }
+
+  private fun logError(message: String, throwable: Throwable? = null) {
+    if (throwable == null) {
+      Log.e(TAG, message)
+    } else {
+      Log.e(TAG, message, throwable)
+    }
   }
 
   private class BackgroundModelManagerViewModel(
@@ -259,5 +301,9 @@ constructor(
     fun dispose() {
       super.onCleared()
     }
+  }
+
+  companion object {
+    private const val TAG = "LlmInferenceEngine"
   }
 }
