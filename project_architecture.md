@@ -2,6 +2,17 @@
 
 本项目基于 Google `google-ai-edge/gallery` 示例，目标是在 Android 端同时提供本地 UI 推理体验和局域网 POST /chat 接口。当前逻辑拆为两个主要部分：**UI 模块**（Compose + ViewModel）和 **Web Service 模块**（前台 Service + NanoHTTPD + LiteRT 引擎）。下述按模块串联运行流程，方便后续维护。
 
+## 0. 当前功能概览（2026-03-13）
+
+1. **本地 UI 推理**：沿用 gallery 的 LLM Chat/Single Turn 体验，支持模型下载、初始化、流式回答、错误恢复等完整链路。
+2. **内置 HTTP Web Service**：前台 Service + NanoHTTPD 监听 `/chat` 与 `/health`，直接复用 LiteRT 模型运行，面向局域网 POST 客户端。
+3. **设置总控面板**：新增 Web Service 设置区，包含启停开关、默认模型选择、推理硬件（CPU/GPU）切换、下载源（官方/HF 镜像）切换，以及远端 allowlist 一键刷新。
+4. **后台存活策略**：Service 具备通知栏控制、可选 Overlay keep-alive（获得悬浮窗权限后放置 1×1 透明 View）与 wakelock 包装，尽量降低后台被杀几率。
+5. **日志可视化**：App Drawer 内置 Logs 面板，聚合 `LlmWebServerService`、`LlmInferenceEngine`、LiteRT streaming 的关键日志，支持复制/清空，方便无 PC 环境调试。
+6. **构建与分发**：release APK 已定制应用名、图标资源，并可通过开发机临时 HTTP 服务（`python3 -m http.server`）供手机下载安装；也可用 ADB over Wi-Fi 安装调试。
+
+> 以上条目涵盖我们近期完成的所有特性，可作为产品级能力清单。下面章节继续保留详细运行机制描述。
+
 ## 1. 运行概览
 
 ```
