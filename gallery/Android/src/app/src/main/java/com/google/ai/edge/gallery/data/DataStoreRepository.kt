@@ -97,6 +97,10 @@ interface DataStoreRepository {
   fun setWebServiceAccelerator(acceleratorLabel: String)
 
   fun getWebServiceAccelerator(): String
+
+  fun setOverlayKeepAliveEnabled(enabled: Boolean)
+
+  fun isOverlayKeepAliveEnabled(): Boolean
 }
 
 /** Repository for managing data using Proto DataStore. */
@@ -350,5 +354,15 @@ class DefaultDataStoreRepository(
       val accelerator = dataStore.data.first().webServiceAccelerator
       if (accelerator.isBlank()) DEFAULT_WEB_SERVICE_ACCELERATOR else accelerator
     }
+  }
+
+  override fun setOverlayKeepAliveEnabled(enabled: Boolean) {
+    runBlocking {
+      dataStore.updateData { it.toBuilder().setOverlayKeepAliveEnabled(enabled).build() }
+    }
+  }
+
+  override fun isOverlayKeepAliveEnabled(): Boolean {
+    return runBlocking { dataStore.data.first().overlayKeepAliveEnabled }
   }
 }

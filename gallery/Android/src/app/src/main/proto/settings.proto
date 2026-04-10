@@ -80,6 +80,7 @@ message Settings {
   string web_service_model_name = 11;
   string download_site = 12;
   string web_service_accelerator = 13;
+  bool overlay_keep_alive_enabled = 14;
 }
 
 message UserData {

@@ -376,15 +376,124 @@ git reset --hard HEAD
 
 ---
 
-## 下一步行动项（等待用户确认）
+## 待做事项列表（按执行顺序）
 
-1. ✅ 本规划文档已保存为 `UPSTREAM_SYNC_PLAN.md`
-2. ⏳ **等待用户确认**：如果可行，请回复 "确认同步"，我将执行 Step 1～Step 4 的合并操作
-3. ⏳ **后续步骤**：用户确认后，我将：
-   - 执行 `git merge upstream/main`
-   - 指导冲突 resolution（按 Step 4 指南）
-   - 验证编译通过
-   - 提供测试包下载链接
+[] Step 1：备份当前 gallery 目录并创建同步分支
+- 执行命令：`cp -r gallery gallery_backup_20260410`
+- 创建分支：`cd gallery && git checkout -b sync-upstream-20260410`
+- 验证点：确认 `gallery_backup_20260410` 目录存在，分支切换成功
+- 时间估算：<5 分钟
+
+[] Step 2：添加上游远程仓库（如未添加）
+- 执行命令：`git remote add upstream https://github.com/google-ai-edge/gallery.git`
+- 验证点：运行 `git remote -v` 确认 `upstream` 存在
+- 时间估算：<2 分钟
+
+[] Step 3：拉取上游最新代码（浅克隆）
+- 执行命令：`git fetch upstream refs/heads/main --depth=1`
+- 验证点：成功获取上游 main 分支最近的 commit
+- 时间估算：<10 秒
+
+[] Step 4：合并上游主分支并解决冲突
+- 执行命令：`git merge upstream/main --no-edit`
+- 冲突文件列表及 resolution 指南：
+  - `Android/src/app/build.gradle.kts`：保留本地 `applicationId`、`versionCode`、`versionName`，同步 `litertlm` 版本为 `0.10.0`
+  - `AndroidManifest.xml`：保留 Web Service 和 overlay keep-alive 定制，可选择性启用 FCM 推送服务
+  - `libs.versions.toml`：将 `litertlm` 版本号从 `0.9.0-alpha06` 升级为 `0.10.0`
+  - `model_allowlist.json`：保留本地定制模型，同步上游新增字段（如 `taskTypes`）
+- 验证点：合并成功且无未解决冲突
+- 时间估算：<30 分钟（若超时则拆分成子任务）
+
+[] Step 5：编译验证（debug 包）
+- 环境变量设置：`export JAVA_HOME=/home/cx/.openclaw/workspace/tools/jdk-21.0.5+11 && export ANDROID_HOME=/home/cx/.openclaw/workspace/android_sdk`
+- 执行命令：`cd gallery/Android/src && ./gradlew clean && ./gradlew assembleDebug`
+- 验证点：输出 `BUILD SUCCESSFUL in Xs`
+- 时间估算：<5 分钟（首次编译可能较长）
+
+[] Step 6：功能测试矩阵验证（按优先级顺序）
+- 测试项 1：UI 推理流程（下载模型 → 初始化 → 聊天 → 流式输出）
+  - 原因：LiteRT SDK 升级可能影响 API 兼容性
+  - 验证方式：手动触发对话流程并观察日志
+- 测试项 2：Web Service `/chat` 接口（定制功能优先级最高）
+  - 验证方式：`POST http://<device>:8081/chat` 并检查响应
+- 测试项 3：Settings 开关功能（DataStore 逻辑）
+  - 验证方式：切换 Web service 开关，确认 Service 启停正常
+- 测试项 4：inference watchdog 功能
+  - 验证方式：模拟长时间无响应，观察日志中是否触发超时取消
+- 测试项 5：overlay keep-alive 悬浮窗
+  - 验证方式：启用悬浮窗后进入后台，确认 Service 不冻结
+- 测试项 6：日志面板功能
+  - 验证方式：Drawer → Logs → 查看/复制日志
+- 时间估算：<30 分钟（若超时则拆分成子任务）
+
+[] Step 7：LiteRT SDK 升级检查清单（`0.9.0` → `0.10.0`）
+- 检查点 1：`EngineConfig` 构造参数（`backend`, `visionBackend`, `audioBackend` 是否变更）
+  - 参考文档：LiteRT changelog
+- 检查点 2：`ConversationConfig` 新增字段（`samplerConfig`, `systemInstruction`）
+  - 参考文档：LiteRT changelog
+- 检查点 3：`Content` 类型 API 稳定性（`Text`, `ImageBytes`, `AudioBytes`）
+  - 参考文档：LiteRT changelog
+- 检查点 4：`ExperimentalFlags` 是否有 breaking change
+  - 参考文档：LiteRT changelog
+- 代码迁移检查点：`LlmChatModelHelper.kt` 中 `EngineConfig` 构造逻辑
+- 时间估算：<15 分钟
+
+[] Step 8：新功能选型评估（可选，按需启用）
+- 功能项 1：FCM 推送集成
+  - 是否启用：❌ 暂不启用（需要 Firebase 配置，非当前必需）
+  - 启用条件：后续需求明确需要远程推送能力
+- 功能项 2：AICore 集成
+  - 是否启用：❌ 暂不启用（当前 `litertlm` 已满足需求）
+  - 启用条件：需要新模型加载策略或动态下载能力
+- 功能项 3：新模板 Task（virtual-piano/mood-tracker 等）
+  - 是否启用：❌ 暂不启用（属于示例代码，非核心功能）
+  - 启用条件：后续需要扩展 AI 能力场景
+- 时间估算：<10 分钟
+
+[] Step 9：生成测试包并记录版本信息
+- 编译 release 包：`./gradlew assembleRelease`
+- 记录版本信息：
+  - `versionCode`: 19（本地值）
+  - `versionName`: 1.0.10（本地值）
+  - `litertlm`: 0.10.0（同步上游）
+  - `commit`: 当前 HEAD commit id
+- 时间估算：<5 分钟
+
+---
+
+## 风险与回滚方案
+
+### 风险项
+
+| 风险 | 可能性 | 影响 | 缓解措施 |
+|------|--------|------|----------|
+| LiteRT SDK API 不兼容 | 中 | 高 | Step 6 测试覆盖 |
+| Git 合并冲突解决错误 | 低 | 中 | 分阶段合并 + 备份 |
+| 覆盖本地定制导致功能失效 | 中 | 高 | 严格按 Step 4 resolution 指南 |
+
+### 回滚方案（若发现严重问题）
+
+```bash
+cd /home/cx/.openclaw/workspace/android_llm_server/gallery
+
+# 保留备份目录（已存在）
+cp -r gallery_backup_20260410 gallery_rollback
+
+# 回滚到备份
+delgallery/*
+cp -r gallery_rollback/* gallery/
+
+# 重新提交（如果已 push）
+git reset --hard HEAD
+```
+
+---
+
+## 下一步行动项
+
+[] 当前待做事项：**Step 1：备份当前 gallery 目录并创建同步分支**
+
+> 请确认是否开始执行 Step 1？如需调整优先级或跳过某项，请说明。
 
 ---
 

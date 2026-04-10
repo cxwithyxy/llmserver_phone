@@ -95,6 +95,10 @@
   <string name="settings_web_service_accelerator_description" translatable="false">Pick CPU or GPU for the embedded HTTP service. GPU requires compatible models and devices.</string>
   <string name="settings_web_service_accelerator_cpu" translatable="false">CPU</string>
   <string name="settings_web_service_accelerator_gpu" translatable="false">GPU</string>
+  <string name="settings_overlay_keep_alive_label" translatable="false">Overlay keep-alive</string>
+  <string name="settings_overlay_keep_alive_description" translatable="false">Keep a 1px overlay in the corner to reduce the chance of Android pausing the service in the background.</string>
+  <string name="settings_overlay_permission_missing" translatable="false">Overlay permission is required to enable this option.</string>
+  <string name="settings_overlay_open_permission" translatable="false">Open overlay settings</string>
   <string name="logs_dialog_title" translatable="false">Service logs</string>
   <string name="logs_dialog_copy_all" translatable="false">Copy all</string>
   <string name="logs_dialog_clear" translatable="false">Clear</string>

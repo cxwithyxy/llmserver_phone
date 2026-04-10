@@ -7,9 +7,16 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.ai.edge.gallery.AppLifecycleProvider
@@ -38,12 +45,15 @@ class LlmWebServerService : Service() {
   private var webServer: LlmNanoHttpServer? = null
   private lateinit var inferenceEngine: LlmInferenceEngine
   private lateinit var powerManager: PowerManager
+  private lateinit var windowManager: WindowManager
+  private var overlayView: View? = null
   private var ipAddress: String = "0.0.0.0"
 
   override fun onCreate() {
     super.onCreate()
     ipAddress = resolveLocalIpAddress()
     powerManager = getSystemService(PowerManager::class.java) ?: error("PowerManager unavailable")
+    windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
     inferenceEngine =
       LlmInferenceEngine(
         context = applicationContext,
@@ -55,6 +65,7 @@ class LlmWebServerService : Service() {
     logInfo("Web service created; resolved IP=$ipAddress")
     startForeground(NOTIFICATION_ID, createNotification())
     startServer()
+    updateOverlayState()
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -74,12 +85,14 @@ class LlmWebServerService : Service() {
       logInfo("Server reference missing; starting a new instance")
       startServer()
     }
+    updateOverlayState()
     return START_STICKY
   }
 
   override fun onDestroy() {
     stopServer()
     inferenceEngine.dispose()
+    hideOverlay()
     logInfo("LLM web service stopped")
     super.onDestroy()
   }
@@ -113,6 +126,62 @@ class LlmWebServerService : Service() {
     ipAddress = resolveLocalIpAddress()
     logInfo("Restarting server with IP=$ipAddress")
     startServer()
+  }
+
+  private fun updateOverlayState() {
+    if (!this::windowManager.isInitialized) return
+    if (dataStoreRepository.isOverlayKeepAliveEnabled() && Settings.canDrawOverlays(this)) {
+      showOverlay()
+    } else {
+      hideOverlay()
+    }
+  }
+
+  private fun showOverlay() {
+    if (overlayView != null) {
+      return
+    }
+    val layoutParams =
+      WindowManager.LayoutParams(
+          1,
+          1,
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+          } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+          },
+          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+          PixelFormat.TRANSLUCENT,
+        )
+        .apply {
+          gravity = Gravity.TOP or Gravity.START
+          x = 1
+          y = 1
+        }
+    val view = View(this).apply { setBackgroundColor(Color.TRANSPARENT) }
+    try {
+      windowManager.addView(view, layoutParams)
+      overlayView = view
+      logInfo("Overlay keep-alive view enabled")
+    } catch (error: Exception) {
+      overlayView = null
+      logError("Failed to add overlay", error)
+    }
+  }
+
+  private fun hideOverlay() {
+    val view = overlayView ?: return
+    try {
+      windowManager.removeView(view)
+      logInfo("Overlay keep-alive view removed")
+    } catch (error: Exception) {
+      logError("Failed to remove overlay", error)
+    } finally {
+      overlayView = null
+    }
   }
 
   private suspend fun handleChatRequest(request: LlmWebRequest): LlmWebResponse {

@@ -20,6 +20,8 @@ import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -56,6 +58,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +71,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -79,6 +83,7 @@ import com.google.ai.edge.gallery.BuildConfig
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.Accelerator
 import com.google.ai.edge.gallery.proto.Theme
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.ai.edge.gallery.ui.common.ClickableLink
 import com.google.ai.edge.gallery.ui.common.tos.AppTosDialog
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
@@ -112,6 +117,18 @@ fun SettingsDialog(
     mutableStateOf(modelManagerViewModel.getWebServiceAcceleratorSetting())
   }
   var acceleratorMenuExpanded by remember { mutableStateOf(false) }
+  var overlayKeepAliveEnabled by remember { mutableStateOf(modelManagerViewModel.isOverlayKeepAliveEnabled()) }
+  val lifecycleOwner = LocalLifecycleOwner.current
+  var overlayPermissionGranted by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        overlayPermissionGranted = Settings.canDrawOverlays(context)
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
   var selectedWebServiceModel by remember {
     mutableStateOf(
       when {
@@ -346,6 +363,68 @@ fun SettingsDialog(
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   modifier = Modifier.padding(top = 4.dp),
                 )
+
+                val overlayPermission = overlayPermissionGranted
+                Row(
+                  modifier = Modifier.padding(top = 12.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                      stringResource(R.string.settings_overlay_keep_alive_label),
+                      style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    )
+                    Text(
+                      stringResource(R.string.settings_overlay_keep_alive_description),
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.padding(top = 4.dp),
+                    )
+                  }
+                  Switch(
+                    checked = overlayKeepAliveEnabled,
+                    onCheckedChange = { enabled ->
+                      if (enabled && !overlayPermission) {
+                        val intent =
+                          Intent(
+                              Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:${context.packageName}"),
+                            )
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        return@Switch
+                      }
+                      overlayKeepAliveEnabled = enabled
+                      modelManagerViewModel.setOverlayKeepAliveEnabled(enabled)
+                      if (webServiceEnabled) {
+                        LlmWebServerService.restart(context)
+                      }
+                    },
+                    enabled = overlayPermission || !overlayKeepAliveEnabled,
+                  )
+                }
+                if (!overlayPermission) {
+                  Text(
+                    stringResource(R.string.settings_overlay_permission_missing),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                  )
+                  Button(
+                    onClick = {
+                      val intent =
+                        Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${context.packageName}"),
+                          )
+                          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                      context.startActivity(intent)
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                  ) {
+                    Text(stringResource(R.string.settings_overlay_open_permission))
+                  }
+                }
               }
             }
           }

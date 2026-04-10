@@ -143,6 +143,7 @@ data class ModelManagerUiState(
   val webServiceModelName: String = "",
   val downloadSite: String = DEFAULT_DOWNLOAD_SITE,
   val webServiceAccelerator: String = DEFAULT_WEB_SERVICE_ACCELERATOR,
+  val overlayKeepAliveEnabled: Boolean = false,
 ) {
   fun isModelInitialized(model: Model): Boolean {
     return modelInitializationStatus[model.name]?.status ==
@@ -204,6 +205,7 @@ constructor(
       it.copy(
         downloadSite = getDownloadSiteSetting(),
         webServiceAccelerator = dataStoreRepository.getWebServiceAccelerator(),
+        overlayKeepAliveEnabled = dataStoreRepository.isOverlayKeepAliveEnabled(),
       )
     }
   }
@@ -554,6 +556,15 @@ constructor(
     val normalized = acceleratorLabel.ifBlank { DEFAULT_WEB_SERVICE_ACCELERATOR }
     dataStoreRepository.setWebServiceAccelerator(normalized)
     _uiState.update { it.copy(webServiceAccelerator = normalized) }
+  }
+
+  fun isOverlayKeepAliveEnabled(): Boolean {
+    return dataStoreRepository.isOverlayKeepAliveEnabled()
+  }
+
+  fun setOverlayKeepAliveEnabled(enabled: Boolean) {
+    dataStoreRepository.setOverlayKeepAliveEnabled(enabled)
+    _uiState.update { it.copy(overlayKeepAliveEnabled = enabled) }
   }
 
   fun getModelUrlResponse(model: Model, accessToken: String? = null): Int {
@@ -1082,6 +1093,7 @@ constructor(
       webServiceModelName = "",
       downloadSite = DEFAULT_DOWNLOAD_SITE,
       webServiceAccelerator = DEFAULT_WEB_SERVICE_ACCELERATOR,
+      overlayKeepAliveEnabled = false,
     )
   }
 
@@ -1177,6 +1189,7 @@ constructor(
       webServiceModelName = webServiceModelName,
       downloadSite = downloadSite,
       webServiceAccelerator = webServiceAccelerator,
+      overlayKeepAliveEnabled = dataStoreRepository.isOverlayKeepAliveEnabled(),
     )
   }
 
