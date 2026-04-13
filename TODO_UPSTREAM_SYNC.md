@@ -34,15 +34,18 @@
 
 ### Phase 1: 环境与基础代码同步
 
-#### [ ] 1. 创建新的 master 分支并同步 upstream 基础代码
-- 目标：建立干净的同步起点，避免历史分支干扰
+#### [ ] 1. 下载 google-ai-edge/gallery 源码并建立同步起点
+- 目标：获取干净的 upstream 源码作为同步起点，避免历史分支干扰
 - 步骤：
-  - 备份当前 `gallery` 目录（含所有本地定制）
+  - 创建新目录 `/home/cx/.openclaw/workspace/android_llm_server/upstream_gallery_source` 用于存放下载的源码
+  - 下载 `google-ai-edge/gallery` 最新 release 的源码（或克隆仓库）
+  - 解压到上述目录，确保路径为：`/home/cx/.openclaw/workspace/android_llm_server/upstream_gallery_source/gallery/Android/src`
+  - 备份当前 `gallery` 目录（含所有本地定制）到 `/home/cx/.openclaw/workspace/android_llm_server/gallery_backup_$(date +%Y%m%d)` 
   - 新建空分支 `master-upstream-sync`
-  - 从 `upstream_git_clone` 或直接克隆 `google-ai-edge/gallery` 主干
   - 手动合并基础代码（不涉及业务逻辑的目录：`model_allowlist.json`, `libs.versions.toml`, `AndroidManifest.xml` 等）
   - 验证基础构建通过 (`./gradlew assembleDebug`)
 - 注意：此步骤只做基础代码同步，暂不集成新功能模块
+- ⚠️ **重要**：下载的源码路径必须为 `/home/cx/.openclaw/workspace/android_llm_server/upstream_gallery_source/`，避免重复下载
 
 #### [ ] 2. 升级 LiteRT SDK 到 `0.10.0` 并修复编译错误
 - 目标：使项目能正常编译通过
@@ -148,6 +151,23 @@
 > 如果遇到无法解决的问题，请在此处记录：
 
 - [ ] （暂无）
+
+---
+
+## 📁 下游源码目录约定
+
+为避免重复下载和混淆，以下目录路径必须严格遵守：
+
+| 目录 | 用途 | 是否提交到 git |
+|------|------|----------------|
+| `/home/cx/.openclaw/workspace/android_llm_server/gallery/` | 当前项目源码（含本地定制） | 是 |
+| `/home/cx/.openclaw/workspace/android_llm_server/upstream_gallery_source/` | 下游 `google-ai-edge/gallery` 源码 | 否（已 .gitignore） |
+| `/home/cx/.openclaw/workspace/android_llm_server/gallery_backup_YYYYMMDD/` | 备份目录（按日期命名） | 否 |
+
+⚠️ **重要**：
+- 下游源码必须放在 `upstream_gallery_source/` 目录，禁止直接克隆到项目根目录或其他位置
+- 该目录已加入 `.gitignore`，避免污染主仓库历史
+- 每次同步前先检查此目录是否存在，存在则跳过下载步骤
 
 ---
 
