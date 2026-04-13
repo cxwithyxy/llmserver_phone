@@ -8,7 +8,14 @@
 *.ap_ 
 *.aab
 
-# Misc
-.DS_Store
+# Temporary directories (backup, upstream source, etc.)
+gallery_untracked_backup/
+upstream_git_clone/
+upstream_temp/
+
+# SSH keys
 llmserver_github
 llmserver_github.pub
+
+# Misc
+.DS_Store
