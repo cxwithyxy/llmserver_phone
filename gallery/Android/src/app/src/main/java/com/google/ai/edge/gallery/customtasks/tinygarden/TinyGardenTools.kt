@@ -45,7 +45,11 @@ data class TinyGardenCommand(
  * Instructions:
  * https://github.com/google-ai-edge/LiteRT-LM/blob/main/kotlin/README.md#6-defining-and-using-tools
  */
-class TinyGardenTools(val onFunctionCalled: (command: TinyGardenCommand) -> Unit) {
+class TinyGardenTools(val onFunctionCalled: (command: TinyGardenCommand) -> Unit) : com.google.ai.edge.litertlm.ToolProvider {
+
+  override fun provideTools(): Map<String, com.google.ai.edge.litertlm.InternalJsonTool> {
+    return super.provideTools() // Debug: call parent implementation
+  }
 
   /** Waters one or more garden plots. */
   @Tool(description = "Water one or more garden plots.")

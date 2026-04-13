@@ -68,7 +68,7 @@ object LlmChatModelHelper {
     supportAudio: Boolean,
     onDone: (String) -> Unit,
     systemInstruction: Contents? = null,
-    tools: List<Any> = listOf(),
+    tools: List<com.google.ai.edge.litertlm.ToolProvider> = listOf(),
     enableConversationConstrainedDecoding: Boolean = false,
   ) {
     // Prepare options.
@@ -92,10 +92,6 @@ object LlmChatModelHelper {
         else -> Backend.CPU()
       }
     Log.d(TAG, "Preferred backend: $preferredBackend")
-
-    if (preferredBackend is Backend.NPU) {
-      ExperimentalFlags.npuLibrariesDir = context.applicationInfo.nativeLibraryDir
-    }
 
     val modelPath = model.getPath(context = context)
     val engineConfig =
@@ -150,7 +146,7 @@ object LlmChatModelHelper {
     supportImage: Boolean,
     supportAudio: Boolean,
     systemInstruction: Contents? = null,
-    tools: List<Any> = listOf(),
+    tools: List<com.google.ai.edge.litertlm.ToolProvider> = listOf(),
     enableConversationConstrainedDecoding: Boolean = false,
   ) {
     try {

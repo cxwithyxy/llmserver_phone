@@ -33,6 +33,7 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.common.chat.ChatViewModel
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.ToolProvider
 import com.google.ai.edge.litertlm.ExperimentalApi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -154,7 +155,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
     task: Task,
     model: Model,
     systemInstruction: Contents? = null,
-    tools: List<Any> = listOf(),
+    tools: List<com.google.ai.edge.litertlm.ToolProvider> = listOf(),
   ) {
     viewModelScope.launch(Dispatchers.Default) {
       setIsResettingSession(true)

@@ -140,7 +140,7 @@ constructor(
           else -> Backend.CPU()
         }
       if (backend is Backend.NPU) {
-        ExperimentalFlags.npuLibrariesDir = appContext.applicationInfo.nativeLibraryDir
+        // ExperimentalFlags.npuLibrariesDir = appContext.applicationInfo.nativeLibraryDir
       }
       val modelPath = model.getPath(context = appContext)
       for (i in 0 until runCount) {
