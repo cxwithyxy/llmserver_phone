@@ -53,7 +53,7 @@
   - 创建 `master-upstream-sync` 分支
   - 构建成功 (`BUILD SUCCESSFUL`)，无编译错误
 
-#### [ ] 2. 升级 LiteRT SDK 到 `0.10.0` 并修复编译错误
+#### [v] 2. 升级 LiteRT SDK 到 `0.10.0` 并修复编译错误
 - 目标：使项目能正常编译通过
 - 当前状态：
   - `libs.versions.toml` 已升级到 `litertlm 0.10.0`
@@ -64,6 +64,10 @@
   3. 更新所有调用方，将 `List<Any>` 改为 `List<ToolProvider>`
   4. 移除或替换 `npuLibrariesDir` (ExperimentalFlags)
   5. 修复 `Lifecycle` 导入问题
+- **2026-04-13 进度**：
+  - 已升级 `litertlm` 到 `0.10.0`
+  - 编译通过 (`BUILD SUCCESSFUL`)，无错误，仅有警告（warnings）
+  - 旧的编译错误（ToolProvider 等）未复现，可能 SDK 已自动适配
 
 #### [ ] 3. 验证 Web Service 模块兼容性
 - 目标：确保现有定制模块在新环境下的功能完整
