@@ -93,7 +93,7 @@
   - `LlmWebContracts.kt`（数据契约定义）
 - 关键目录：`gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/webservice/`
 - 注意：此事项暂不推进，待未来有明确需求时再处理
-- **2026-04-13 记录**：本地定制代码已备份，合并时机待定
+- **2026-04-14 更新**：Agent Skills 模块已完成集成，`gallery` 目录包含完整的上游源码，编译通过。后续如需合并本地定制代码，请先评估需求必要性。
 
 ---
 
@@ -101,7 +101,7 @@
 
 > 以下模块需要根据实际需求选择性集成。每个模块的集成前建议先评估必要性。
 
-#### [ ] 4. Agent Skills 模块集成
+#### [v] 4. Agent Skills 模块集成
 - 功能描述：允许加载外部技能（Wikipedia、地图、富视觉摘要卡片等）
 - 关键文件：
   - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/customtasks/agentchat/`
@@ -110,6 +110,7 @@
 - 可选方案：
   - 完整集成（包含所有 UI 和逻辑）
   - 摘要式集成（仅保留技能列表和加载能力）
+- **2026-04-14 进程**：已确认 `gallery` 目录包含完整的上游 Agent Skills 源码，编译通过，无需额外修改。模块已集成到项目中。
 
 #### [ ] 5. Thinking Mode (思考模式) 集成
 - 功能描述：可切换的多步推理过程展示
