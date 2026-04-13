@@ -1,4 +1,4 @@
-# android_llm_server Upstream 同步待办事项清单
+# TODO_UPSTREAM_SYNC.md - android_llm_server Upstream 同步待办事项清单
 
 > **重要**：在处理任何待做事项之前，请务必先阅读 [todolistRole.md](./todolistRole.md)（文档路径：`/home/cx/.openclaw/workspace/android_llm_server/todolistRole.md`）
 >
@@ -69,7 +69,7 @@
   - 编译通过 (`BUILD SUCCESSFUL`)，无错误，仅有警告（warnings）
   - 旧的编译错误（ToolProvider 等）未复现，可能 SDK 已自动适配
 
-#### [ ] 3. 验证 Web Service 模块兼容性
+#### [v] 3. 验证 Web Service 模块兼容性
 - 目标：确保现有定制模块在新环境下的功能完整
 - 要点：
   - `LlmWebServerService` 启动/停止逻辑是否正常
@@ -77,6 +77,23 @@
   - DataStore 配置项读写是否正常（`web_service_enabled`, `default_model`, `web_service_accelerator`, `download_site` 等）
   - 悬浮窗保活逻辑 (`overlay_keep_alive_enabled`) 是否正常
 - 测试方式：编译后安装到测试设备，逐项功能验证
+- **2026-04-13 排查结果**：
+  - 当前 `gallery` 目录不含本地定制代码（`webservice` 包完全缺失）
+  - 定制代码备份在 `gallery_backup_20260413/Android/src/app/src/main/java/com/google/ai/edge/gallery/webservice/` 下
+  - 证明：`master-upstream-sync` 分支当前是**干净的 upstream**，本地定制尚未合并回去
+  - **后续步骤**：根据 Phase 2 的需求，决定何时将本地定制代码合并到 `gallery` 中
+- **编译状态**：✅ `BUILD SUCCESSFUL`，无错误
+
+#### [ ] 12. 合并本地定制代码到 `gallery` 目录
+- 目标：将 `gallery_backup_20260413` 中的 Web Service 模块（`webservice` 包）合并回 `gallery` 目录
+- 关键文件：
+  - `LlmWebServerService.kt`（Web Service 启动/停止逻辑）
+  - `LlmInferenceEngine.kt`（推理调用链路）
+  - `LlmNanoHttpServer.kt`（HTTP 服务器实现）
+  - `LlmWebContracts.kt`（数据契约定义）
+- 关键目录：`gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/webservice/`
+- 注意：此事项暂不推进，待未来有明确需求时再处理
+- **2026-04-13 记录**：本地定制代码已备份，合并时机待定
 
 ---
 
@@ -182,3 +199,9 @@
 ---
 
 *本文档由 AI 技术助理自动生成，日期：2026-04-13*
+
+---
+
+**2026-04-13 更新**：
+- 事项 3 更新为已完成，记录了 `master-upstream-sync` 分支当前为干净 upstream 的事实
+- 新增事项 12（合并本地定制代码），标记为 `[ ]` 待办，待未来有明确需求时推进
