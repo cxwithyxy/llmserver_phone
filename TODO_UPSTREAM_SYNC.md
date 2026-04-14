@@ -317,3 +317,44 @@
   - **5-2**: 测试模型支持情况（添加 `llmSupportThinking` 字段配置）
   - **5-3**: 集成 Thinking Mode UI 到 LLM Chat 页面
   - **5-4**: 验证 LiteRT SDK 支持情况（当前返回的 thinking text 始终为 null）
+
+---
+
+**2026-04-14 新增问题追加到 5 系列**：基于编译失败和代码检查，发现以下新问题需要纳入 Thinking Mode 相关事项：
+
+#### [ ] 5-5. 补充缺失的字符串资源
+- 目标：修复 `R.string.*` 引用错误导致的编译失败
+- 要点：
+  - 缺失资源：`aichat_initializing_title`, `aichat_initializing_content`, `view_console_logs`, `view_in_full_screen`, `skills`, `logs_viewer_*`, `shortDescription`, `newFeature`
+  - 可能来源：上游 `gallery` 的 strings.xml 文件可能不完整，或需要从其他模块迁移
+  - 解决方案：
+    - 检查 upstream gallery 的 strings.xml 文件内容
+    - 对比备份版本 `gallery_backup_20260413` 中的资源定义
+    - 补充缺失的字符串定义到 `res/values/strings.xml`
+- 注意：这些资源可能来自上游的新功能模块，需要确认是否属于 Thinking Mode 相关功能
+
+#### [ ] 5-6. 修复类型错误和 API 参数不匹配
+- 目标：解决编译器报错的类型推断问题
+- 要点：
+  - 编译错误位置：`ChatPanel.kt:495`, `HomeScreen.kt:863-872`, `LlmSingleTurnTaskModule.kt:48`, `GalleryNavGraph.kt:216,240,344,531`
+  - 主要问题：
+    - `isFirstInitialization` 未定义
+    - `LLM_AGENT_CHAT` 未定义
+    - `instanceToCleanUp` 参数不存在
+    - `dataStoreRepository` 访问权限问题（private）
+  - 解决方案：
+    - 检查上游 gallery 的对应代码，确认这些参数/属性的正确定义方式
+    - 可能需要同步其他相关类或接口定义
+- 注意：这些问题可能与上游代码版本差异有关，需确认使用的 gallery 版本
+
+#### [ ] 5-7. 验证 SDK 返回 thinking text 的能力
+- 目标：确认 LiteRT LM SDK 是否支持在 `MessageCallback.onMessage` 中返回 thinking text
+- 要点：
+  - 当前代码中 `resultListener(message.toString(), false, null)` 第三个参数始终为 null
+  - 需要确认 SDK 的 `Message` 对象是否包含 thinking text 字段
+  - 检查 LiteRT LM SDK 文档或源码，了解 `enable_thinking` 参数的实际效果
+- 测试方式：
+  - 编写最小测试脚本调用 LiteRT SDK，观察 `onMessage` 返回的内容
+  - 如果 SDK 支持返回 thinking text，则需要修改 `LlmChatModelHelper.kt`
+  - 如果 SDK 不支持，则 Thinking Mode 功能无法实现（当前代码逻辑依赖 SDK 返回）
+- 注意：如果 SDK 不支持，可能需要考虑降级处理（不显示 thinking mode UI）
