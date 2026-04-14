@@ -1,21 +1,8 @@
-# Android / Gradle build outputs
-**/build/
-**/.gradle/
-**/local.properties
-**/.idea/
-*.iml
-*.apk
-*.ap_ 
-*.aab
-
-# Temporary directories (backup, upstream source, etc.)
-gallery_untracked_backup/
-upstream_git_clone/
-upstream_temp/
-
-# SSH keys
-llmserver_github
-llmserver_github.pub
-
-# Misc
 .DS_Store
+
+# 防止意外提交的临时/备份目录
+gallery/
+gallery_backup_*/
+upstream_gallery_source/
+upstream_temp/
+upstream_git_clone/
