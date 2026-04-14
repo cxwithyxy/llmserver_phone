@@ -81,19 +81,8 @@
   - 当前 `gallery` 目录不含本地定制代码（`webservice` 包完全缺失）
   - 定制代码备份在 `gallery_backup_20260413/Android/src/app/src/main/java/com/google/ai/edge/gallery/webservice/` 下
   - 证明：`master-upstream-sync` 分支当前是**干净的 upstream**，本地定制尚未合并回去
-  - **后续步骤**：根据 Phase 2 的需求，决定何时将本地定制代码合并到 `gallery` 中
+  - **后续步骤**：根据 Phase 3 的规划，推进合并工作（见 Phase 3 子事项）
 - **编译状态**：✅ `BUILD SUCCESSFUL`，无错误
-
-#### [ ] 12. 合并本地定制代码到 `gallery` 目录
-- 目标：将 `gallery_backup_20260413` 中的 Web Service 模块（`webservice` 包）合并回 `gallery` 目录
-- 关键文件：
-  - `LlmWebServerService.kt`（Web Service 启动/停止逻辑）
-  - `LlmInferenceEngine.kt`（推理调用链路）
-  - `LlmNanoHttpServer.kt`（HTTP 服务器实现）
-  - `LlmWebContracts.kt`（数据契约定义）
-- 关键目录：`gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/webservice/`
-- 注意：此事项暂不推进，待未来有明确需求时再处理
-- **2026-04-14 更新**：Agent Skills 模块已完成集成，`gallery` 目录包含完整的上游源码，编译通过。后续如需合并本地定制代码，请先评估需求必要性。
 
 ---
 
