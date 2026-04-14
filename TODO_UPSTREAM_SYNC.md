@@ -192,6 +192,82 @@
 
 ---
 
+## Phase 3: 本地定制代码合并
+
+> 此阶段专注于将 `gallery_backup_20260413` 中的 Web Service 定制模块合并到 `master-upstream-sync` 分支的 `gallery` 目录。
+> 当前 `master-upstream-sync` 是一个干净的 upstream 分支，暂未合并本地定制代码。
+
+### 合并背景
+
+- **备份目录**：`/home/cx/.openclaw/workspace/android_llm_server/gallery_backup_20260413`
+- **目标目录**：`gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/webservice/`
+- **核心文件**：
+  - `LlmWebServerService.kt`（Service 启动/停止、通知、悬浮窗保活）
+  - `LlmInferenceEngine.kt`（推理调用链路、模型初始化、并发控制）
+  - `LlmNanoHttpServer.kt`（NanoHTTPD HTTP 服务器实现）
+  - `LlmWebContracts.kt`（请求/响应数据契约）
+
+### 待做事项列表
+
+> 每次会话只处理一个子事项。已完成 `[v]` 或已取消 `[x]` 的事项不能再次选择。
+
+#### [ ] 12-1. 评估合并必要性与范围
+- 目标：确认是否需要将 Web Service 模块合并回 upstream，以及合并范围
+- 要点：
+  - 当前 `master-upstream-sync` 是干净的 upstream 分支，无本地定制代码
+  - 合并后会导致分支与 upstream 偏离，需评估后续同步成本
+  - 如果仅用于本地部署（非发布到 Google Play），可考虑保持独立分支或 tag
+  - 如果需要随 upstream 迭代更新，建议提取为独立模块或通过 build variant 支持
+- 可选方案：
+  - **方案 A**：完全合并到 `gallery` 目录，后续手动同步 upstream 变更
+  - **方案 B**：保持 Web Service 在独立模块（如 `webservice/`），通过 Gradle dependency 引入
+  - **方案 C**：暂不合并，仅在本地分支维护定制代码
+- 注意：用户需明确是否需要 Web Service 功能随 upstream 迭代更新
+
+#### [ ] 12-2. 创建 webservice 模块的 Android Library 结构
+- 目标：为 Web Service 模块创建独立的 Gradle module，便于复用与维护
+- 步骤：
+  - 在 `gallery/` 下新建 `webservice` 目录（与 `Android/src/app` 同级）
+  - 创建 `webservice/build.gradle.kts`，声明 `android-library` 插件
+  - 配置 `module.xml`、`proguard-rules.pro` 等必要文件
+  - 在 `settings.gradle.kts` 中添加 `:webservice` module
+  - 将备份目录中的 Kotlin 文件迁移到新模块（`src/main/java/com/google/ai/edge/gallery/webservice/`）
+- 注意：需要处理包名冲突与依赖注入配置（`@AndroidEntryPoint` 等）
+
+#### [ ] 12-3. 解决 Web Service 模块的依赖关系
+- 目标：确保 `webservice` module 能正确编译并访问 `gallery` 的类
+- 关键依赖：
+  - `com.google.ai.edge.gallery`（主应用模块）
+  - `dagger-hilt`（依赖注入）
+  - `nanohttpd`（HTTP 服务器，已通过 `libs.versions.toml` 配置）
+  - `kotlinx-coroutines`（协程支持）
+- 解决方案：
+  - 在 `webservice/build.gradle.kts` 中添加 `implementation project(":Android")` 依赖
+  - 确保 `webservice/src/main/AndroidManifest.xml` 声明必要的权限与 service 组件
+  - 处理 `LlmWebServerService.kt` 中的 `@AndroidEntryPoint` 和 `@Inject` 注入逻辑
+- 注意：可能需要调整 `LlmInferenceEngine.kt` 的构造函数参数，避免循环依赖
+
+#### [ ] 12-4. 整合 Web Service 到主应用
+- 目标：在 `gallery` 应用中启用 Web Service 功能
+- 步骤：
+  - 在 `Android/app/build.gradle.kts` 中添加 `implementation project(":webservice")`
+  - 在 `Android/app/src/main/AndroidManifest.xml` 中注册 `LlmWebServerService`
+  - 验证悬浮窗权限 (`SYSTEM_ALERT_WINDOW`) 和前台服务权限 (`FOREGROUND_SERVICE`) 是否正常
+  - 测试 HTTP 接口 `/health`、`/chat` 的响应是否符合预期
+- 注意：需要确认 `DataStoreRepository`、`DownloadRepository` 等依赖能否正常注入
+
+#### [ ] 12-5. 验证 Web Service 功能完整性
+- 目标：确保合并后的 Web Service 模块功能与备份版本一致
+- 测试项：
+  - Service 启动/停止逻辑是否正常（`ACTION_START_SERVICE`, `ACTION_STOP_SERVICE`, `ACTION_RESTART_SERVICE`）
+  - HTTP 接口 `/chat` 是否能正确调用推理引擎并返回结果
+  - 悬浮窗保活 (`overlay_keep_alive_enabled`) 是否正常工作
+  - 前台服务通知是否显示 IP 地址和端口号
+  - WakeLock 是否正确 acquire/release，避免设备休眠
+- 测试方式：编译后安装到测试设备，逐项功能验证；或编写单元测试覆盖核心逻辑
+
+---
+
 ## 📌 规则说明（参考 [todolistRole.md](./todolistRole.md)）
 
 1. **每次只处理一个待做事项**：从列表中选择一个未完成的事项进行处理，完成后更新状态即可结束本次会话
@@ -237,7 +313,10 @@
 
 ---
 
-**2026-04-14 更新（事项 5 拆分）**：
+**2026-04-14 更新（Phase 3 新增）**：
+- 将原事项 12（合并本地定制代码）拆分为 Phase 3 独立章节
+- 进一步细化为子事项 12-1 至 12-5，覆盖评估、模块化、依赖管理、集成、验证等全流程
+
 - 原事项 5 已标记为 `[v]` 完成，拆分为以下子事项继续推进：
   - **5-1**: 验证当前 Thinking Mode 实现是否完整
   - **5-2**: 测试模型支持情况（添加 `llmSupportThinking` 字段配置）
