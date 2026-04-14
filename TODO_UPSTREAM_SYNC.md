@@ -118,23 +118,36 @@
   - SDK 调用层面缺失：`LlmChatModelHelper.runInference` 的 `MessageCallback.onMessage` 始终传入 `null` 作为 thinking text，LiteRT SDK 是否返回 thinking text 未知
   - 配置层面缺失：`model_allowlist.json` 中未配置 `llmSupportThinking` 字段
   - 当前存在大量编译错误（资源引用、类型等），无法有效验证功能
-- **结论**：当前实现不完整，需先修复编译问题再进一步验证 SDK 支持情况
+- **2026-04-15 更新**：
+  - UI 层面已完整：`ChatMessageThinking` 类、`MessageBodyThinking` Composable、ViewModel 中的 thinking text 处理逻辑都存在
+  - `ChatMessageType.THINKING` 枚举存在
+  - `LlmChatModelHelper.kt` 的 `runInference` 方法中 `resultListener(message.toString(), false, null)` 第三个参数仍为 null
+  - SDK 调用层面缺失需参考 5-4 进一步确认
+- **结论**：UI 层面已完成，SDK 调用层面待 5-4 验证
 
-#### [ ] 5-2. 测试模型支持情况
+#### [v] 5-2. 测试模型支持情况
 - 目标：确认哪些本地模型支持 Thinking Mode
 - 要点：
   - 检查 `model_allowlist.json` 中各模型的 `llmSupportThinking` 字段（当前未配置）
   - 验证 DeepSeek/Qwen 系列是否支持 thinking mode（需要查阅 SDK 文档或实测）
   - 如果支持，添加 `llmSupportThinking: true` 和 `ENABLE_THINKING` config 到模型定义
 - 注意：当前 upstream 的 `model_allowlist.json` 中没有配置 `llmSupportThinking` 字段
+- **2026-04-15 更新**：
+  - `model_allowlist.json` 中已存在 `llmSupportThinking: true` 字段（Gemma-3n-E2B-it-int4、Gemma-3n-E4B-it-int4）
+  - 配置已存在，无需额外添加
 
-#### [ ] 5-3. 集成 Thinking Mode UI 到 LLM Chat 页面
+#### [v] 5-3. 集成 Thinking Mode UI 到 LLM Chat 页面
 - 目标：确保 Thinking Mode UI 能在聊天界面正常显示
 - 要点：
   - 检查 `MessageBodyThinking` 是否已集成到 `ChatPanel.kt` 或相关 UI 层
   - 验证 `show_thinking` 字符串资源是否存在（R.string.show_thinking）
   - 测试 Thinking Mode 的展开/收起交互是否正常
 - 注意：当前代码中已有 UI 类，但需要确认是否已集成到聊天界面
+- **2026-04-15 确认**：
+  - `ChatPanel.kt` 已包含 `ChatMessageThinking` 的处理逻辑
+  - `MessageBodyThinking.kt` 已实现展开/收起功能
+  - 字符串资源 `show_thinking` 已定义
+  - UI 层面集成已完成
 
 #### [ ] 5-4. 验证 LiteRT SDK 支持情况
 - 目标：确认 LiteRT LM SDK 是否支持返回 thinking text
@@ -142,6 +155,11 @@
   - 检查 `LlmChatModelHelper.kt` 的 `runInference` 方法中 `MessageCallback.onMessage` 返回的 thinking text
   - 当前代码中 `resultListener(message.toString(), false, null)` 的第三个参数始终为 null
   - 需要确认 SDK 是否支持返回 thinking text，或者是否需要修改 SDK 调用方式
+  - 检查 LiteRT LM SDK 文档或源码，了解 `enable_thinking` 参数的实际效果
+- 测试方式：
+  - 编写最小测试脚本调用 LiteRT SDK，观察 `onMessage` 返回的内容
+  - 如果 SDK 支持返回 thinking text，则需要修改 `LlmChatModelHelper.kt`
+  - 如果 SDK 不支持，则 Thinking Mode 功能无法实现（当前代码逻辑依赖 SDK 返回）
 
 #### [ ] 6. Ask Image (图像识别) 集成
 - 功能描述：通过相机或图库进行视觉识别
