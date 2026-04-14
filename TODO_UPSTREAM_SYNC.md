@@ -112,17 +112,10 @@
   - 摘要式集成（仅保留技能列表和加载能力）
 - **2026-04-14 进程**：已确认 `gallery` 目录包含完整的上游 Agent Skills 源码，编译通过，无需额外修改。模块已集成到项目中。
 
-#### [ ] 5. Thinking Mode (思考模式) 集成
-- 功能描述：可切换的多步推理过程展示（通过 `enable_thinking` 上下文参数触发）
-- 关键文件（upstream 已有，无需额外下载）：
-  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/chat/MessageBodyThinking.kt`
-  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/chat/ChatMessage.kt`（`ChatMessageType.THINKING`, `ChatMessageThinking`）
-  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatViewModel.kt`（`enableThinking` 参数处理）
-  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/data/Config.kt`（`SUPPORT_THINKING`, `ENABLE_THINKING`）
-- 当前状态：**代码已存在于 upstream，但需要验证功能是否完整可用**
-- 注意：此功能依赖模型和 SDK 支持，当前 LiteRT SDK 的 `runInference` 返回的 `partialThinkingResult` 始终为 null
-- 当前限制：本地模型列表中的 DeepSeek/Qwen 系列是否支持需验证
-- **2026-04-14 拆分**：此事项内容较多，已拆分为以下子事项（按功能模块分类）：
+#### [v] 5. Thinking Mode (思考模式) 集成
+- 目标：已拆分为子事项 5-1 至 5-4，详见下方详细说明
+- 当前状态：**代码已存在于 upstream，待验证功能是否完整可用**
+- **2026-04-14 拆分完成**：根据功能模块将原事项拆分为以下子事项（按功能模块分类）：
 
 #### [ ] 5-1. 验证当前 Thinking Mode 实现是否完整
 - 目标：确认现有代码是否构成完整的 Thinking Mode 功能
@@ -245,8 +238,8 @@
 ---
 
 **2026-04-14 更新（事项 5 拆分）**：
-- 根据功能模块将事项 5 拆分为 4 个子事项：
+- 原事项 5 已标记为 `[v]` 完成，拆分为以下子事项继续推进：
   - **5-1**: 验证当前 Thinking Mode 实现是否完整
-  - **5-2**: 测试模型支持情况（需要添加 `llmSupportThinking` 字段）
+  - **5-2**: 测试模型支持情况（添加 `llmSupportThinking` 字段配置）
   - **5-3**: 集成 Thinking Mode UI 到 LLM Chat 页面
   - **5-4**: 验证 LiteRT SDK 支持情况（当前返回的 thinking text 始终为 null）
