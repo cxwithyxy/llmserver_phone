@@ -26,11 +26,7 @@ import com.google.ai.edge.gallery.data.DEFAULT_MAX_TOKEN
 import com.google.ai.edge.gallery.data.DEFAULT_TEMPERATURE
 import com.google.ai.edge.gallery.data.DEFAULT_TOPK
 import com.google.ai.edge.gallery.data.DEFAULT_TOPP
-import com.google.ai.edge.gallery.data.DEFAULT_VISION_ACCELERATOR
 import com.google.ai.edge.gallery.data.Model
-import com.google.ai.edge.gallery.runtime.CleanUpListener
-import com.google.ai.edge.gallery.runtime.LlmModelHelper
-import com.google.ai.edge.gallery.runtime.ResultListener
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
@@ -43,30 +39,37 @@ import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.MessageCallback
 import com.google.ai.edge.litertlm.SamplerConfig
-import com.google.ai.edge.litertlm.ToolProvider
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val TAG = "AGLlmChatModelHelper"
+private const val INFERENCE_WATCHDOG_MS = 60_000L
+
+typealias ResultListener = (partialResult: String, done: Boolean, partialThinkingResult: String?) -> Unit
+
+typealias CleanUpListener = () -> Unit
 
 data class LlmModelInstance(val engine: Engine, var conversation: Conversation)
 
-object LlmChatModelHelper : LlmModelHelper {
+object LlmChatModelHelper {
   // Indexed by model name.
   private val cleanUpListeners: MutableMap<String, CleanUpListener> = mutableMapOf()
 
   @OptIn(ExperimentalApi::class) // opt-in experimental flags
-  override fun initialize(
+  fun initialize(
     context: Context,
     model: Model,
     supportImage: Boolean,
     supportAudio: Boolean,
     onDone: (String) -> Unit,
-    systemInstruction: Contents?,
-    tools: List<ToolProvider>,
-    enableConversationConstrainedDecoding: Boolean,
-    coroutineScope: CoroutineScope?,
+    systemInstruction: Contents? = null,
+    tools: List<com.google.ai.edge.litertlm.ToolProvider> = listOf(),
+    enableConversationConstrainedDecoding: Boolean = false,
   ) {
     // Prepare options.
     val maxTokens =
@@ -77,27 +80,15 @@ object LlmChatModelHelper : LlmModelHelper {
       model.getFloatConfigValue(key = ConfigKeys.TEMPERATURE, defaultValue = DEFAULT_TEMPERATURE)
     val accelerator =
       model.getStringConfigValue(key = ConfigKeys.ACCELERATOR, defaultValue = Accelerator.GPU.label)
-    val visionAccelerator =
-      model.getStringConfigValue(
-        key = ConfigKeys.VISION_ACCELERATOR,
-        defaultValue = DEFAULT_VISION_ACCELERATOR.label,
-      )
-    val visionBackend =
-      when (visionAccelerator) {
-        Accelerator.CPU.label -> Backend.CPU()
-        Accelerator.GPU.label -> Backend.GPU()
-        Accelerator.NPU.label ->
-          Backend.NPU(nativeLibraryDir = context.applicationInfo.nativeLibraryDir)
-        else -> Backend.GPU()
-      }
+    Log.d(TAG, "Initializing...")
     val shouldEnableImage = supportImage
     val shouldEnableAudio = supportAudio
+    Log.d(TAG, "Enable image: $shouldEnableImage, enable audio: $shouldEnableAudio")
     val preferredBackend =
       when (accelerator) {
         Accelerator.CPU.label -> Backend.CPU()
         Accelerator.GPU.label -> Backend.GPU()
-        Accelerator.NPU.label ->
-          Backend.NPU(nativeLibraryDir = context.applicationInfo.nativeLibraryDir)
+        Accelerator.NPU.label -> Backend.NPU()
         else -> Backend.CPU()
       }
     Log.d(TAG, "Preferred backend: $preferredBackend")
@@ -107,7 +98,7 @@ object LlmChatModelHelper : LlmModelHelper {
       EngineConfig(
         modelPath = modelPath,
         backend = preferredBackend,
-        visionBackend = if (shouldEnableImage) visionBackend else null, // must be GPU for Gemma 3n
+        visionBackend = if (shouldEnableImage) Backend.GPU() else null, // must be GPU for Gemma 3n
         audioBackend = if (shouldEnableAudio) Backend.CPU() else null, // must be CPU for Gemma 3n
         maxNumTokens = maxTokens,
         cacheDir =
@@ -150,13 +141,13 @@ object LlmChatModelHelper : LlmModelHelper {
   }
 
   @OptIn(ExperimentalApi::class) // opt-in experimental flags
-  override fun resetConversation(
+  fun resetConversation(
     model: Model,
     supportImage: Boolean,
     supportAudio: Boolean,
-    systemInstruction: Contents?,
-    tools: List<ToolProvider>,
-    enableConversationConstrainedDecoding: Boolean,
+    systemInstruction: Contents? = null,
+    tools: List<com.google.ai.edge.litertlm.ToolProvider> = listOf(),
+    enableConversationConstrainedDecoding: Boolean = false,
   ) {
     try {
       Log.d(TAG, "Resetting conversation for model '${model.name}'")
@@ -206,7 +197,7 @@ object LlmChatModelHelper : LlmModelHelper {
     }
   }
 
-  override fun cleanUp(model: Model, onDone: () -> Unit) {
+  fun cleanUp(model: Model, onDone: () -> Unit) {
     if (model.instance == null) {
       return
     }
@@ -235,27 +226,18 @@ object LlmChatModelHelper : LlmModelHelper {
     Log.d(TAG, "Clean up done.")
   }
 
-  override fun stopResponse(model: Model) {
-    val instance = model.instance as? LlmModelInstance ?: return
-    instance.conversation.cancelProcess()
-  }
-
-  override fun runInference(
+  fun runInference(
     model: Model,
     input: String,
+    requestToken: String,
     resultListener: ResultListener,
     cleanUpListener: CleanUpListener,
-    onError: (message: String) -> Unit,
-    images: List<Bitmap>,
-    audioClips: List<ByteArray>,
-    coroutineScope: CoroutineScope?,
-    extraContext: Map<String, String>?,
+    onError: (message: String) -> Unit = {},
+    images: List<Bitmap> = listOf(),
+    audioClips: List<ByteArray> = listOf(),
+    extraContext: Map<String, String>? = null,
   ) {
-    val instance = model.instance as? LlmModelInstance
-    if (instance == null) {
-      onError("LlmModelInstance is not initialized.")
-      return
-    }
+    val instance = model.instance as LlmModelInstance
 
     // Set listener.
     if (!cleanUpListeners.containsKey(model.name)) {
@@ -263,6 +245,32 @@ object LlmChatModelHelper : LlmModelHelper {
     }
 
     val conversation = instance.conversation
+
+    Log.d(TAG, "runInference token=$requestToken model=${model.name} conversation=${conversation.hashCode()}")
+
+    fun startWatchdog(): Job {
+      return CoroutineScope(Dispatchers.Default).launch {
+        delay(INFERENCE_WATCHDOG_MS)
+        Log.e(
+          TAG,
+          "token=$requestToken watchdog fired after ${INFERENCE_WATCHDOG_MS}ms; cancelling conversation",
+        )
+        try {
+          conversation.cancelProcess()
+        } catch (error: Exception) {
+          Log.e(TAG, "token=$requestToken failed to cancel conversation", error)
+        }
+        onError("Inference timed out after ${INFERENCE_WATCHDOG_MS}ms")
+        resultListener("", true, null)
+      }
+    }
+
+    var watchdogJob = startWatchdog()
+
+    fun resetWatchdog() {
+      watchdogJob.cancel()
+      watchdogJob = startWatchdog()
+    }
 
     val contents = mutableListOf<Content>()
     for (image in images) {
@@ -280,19 +288,24 @@ object LlmChatModelHelper : LlmModelHelper {
       Contents.of(contents),
       object : MessageCallback {
         override fun onMessage(message: Message) {
+          Log.d(TAG, "token=$requestToken onMessage len=${message.toString().length}")
+          resetWatchdog()
           resultListener(message.toString(), false, null)
         }
 
         override fun onDone() {
+          Log.d(TAG, "token=$requestToken onDone")
+          watchdogJob.cancel()
           resultListener("", true, null)
         }
 
         override fun onError(throwable: Throwable) {
+          watchdogJob.cancel()
           if (throwable is CancellationException) {
-            Log.i(TAG, "The inference is cancelled.")
+            Log.i(TAG, "token=$requestToken inference cancelled by caller")
             resultListener("", true, null)
           } else {
-            Log.e(TAG, "onError", throwable)
+            Log.e(TAG, "token=$requestToken onError", throwable)
             onError("Error: ${throwable.message}")
           }
         }

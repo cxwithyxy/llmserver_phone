@@ -19,36 +19,20 @@ package com.google.ai.edge.gallery.ui.llmchat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.core.os.bundleOf
 import com.google.ai.edge.gallery.GalleryEvent
-import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Model
-import com.google.ai.edge.gallery.data.RuntimeType
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.firebaseAnalytics
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageAudioClip
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageImage
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
 import com.google.ai.edge.gallery.ui.common.chat.ChatView
-import com.google.ai.edge.gallery.ui.common.chat.SendMessageTrigger
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
-import com.google.ai.edge.gallery.ui.theme.emptyStateContent
-import com.google.ai.edge.gallery.ui.theme.emptyStateTitle
 
 private const val TAG = "AGLlmChatScreen"
 
@@ -57,39 +41,21 @@ fun LlmChatScreen(
   modelManagerViewModel: ModelManagerViewModel,
   navigateUp: () -> Unit,
   modifier: Modifier = Modifier,
-  taskId: String = BuiltInTaskId.LLM_CHAT,
-  onFirstToken: (Model) -> Unit = {},
   onGenerateResponseDone: (Model) -> Unit = {},
-  onSkillClicked: () -> Unit = {},
   onResetSessionClickedOverride: ((Task, Model) -> Unit)? = null,
   composableBelowMessageList: @Composable (Model) -> Unit = {},
   viewModel: LlmChatViewModel = hiltViewModel(),
-  allowEditingSystemPrompt: Boolean = false,
-  curSystemPrompt: String = "",
-  onSystemPromptChanged: (String) -> Unit = {},
-  emptyStateComposable: @Composable (Model) -> Unit = {},
-  sendMessageTrigger: SendMessageTrigger? = null,
-  showImagePicker: Boolean = false,
-  showAudioPicker: Boolean = false,
 ) {
+
   ChatViewWrapper(
     viewModel = viewModel,
     modelManagerViewModel = modelManagerViewModel,
-    taskId = taskId,
+    taskId = BuiltInTaskId.LLM_CHAT,
     navigateUp = navigateUp,
     modifier = modifier,
-    onSkillClicked = onSkillClicked,
-    onFirstToken = onFirstToken,
     onGenerateResponseDone = onGenerateResponseDone,
     onResetSessionClickedOverride = onResetSessionClickedOverride,
     composableBelowMessageList = composableBelowMessageList,
-    allowEditingSystemPrompt = allowEditingSystemPrompt,
-    curSystemPrompt = curSystemPrompt,
-    onSystemPromptChanged = onSystemPromptChanged,
-    emptyStateComposable = emptyStateComposable,
-    sendMessageTrigger = sendMessageTrigger,
-    showImagePicker = showImagePicker,
-    showAudioPicker = showAudioPicker,
   )
 }
 
@@ -106,27 +72,6 @@ fun LlmAskImageScreen(
     taskId = BuiltInTaskId.LLM_ASK_IMAGE,
     navigateUp = navigateUp,
     modifier = modifier,
-    showImagePicker = true,
-    showAudioPicker = false,
-    emptyStateComposable = { model ->
-      Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-          modifier =
-            Modifier.align(Alignment.Center).padding(horizontal = 48.dp).padding(bottom = 48.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-          Text(stringResource(R.string.askimage_emptystate_title), style = emptyStateTitle)
-          var contentRes = R.string.askimage_emptystate_content
-          Text(
-            stringResource(contentRes),
-            style = emptyStateContent,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-          )
-        }
-      }
-    },
   )
 }
 
@@ -143,26 +88,6 @@ fun LlmAskAudioScreen(
     taskId = BuiltInTaskId.LLM_ASK_AUDIO,
     navigateUp = navigateUp,
     modifier = modifier,
-    showImagePicker = false,
-    showAudioPicker = true,
-    emptyStateComposable = {
-      Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-          modifier =
-            Modifier.align(Alignment.Center).padding(horizontal = 48.dp).padding(bottom = 48.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-          Text(stringResource(R.string.askaudio_emptystate_title), style = emptyStateTitle)
-          Text(
-            stringResource(R.string.askaudio_emptystate_content),
-            style = emptyStateContent,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-          )
-        }
-      }
-    },
   )
 }
 
@@ -173,22 +98,12 @@ fun ChatViewWrapper(
   taskId: String,
   navigateUp: () -> Unit,
   modifier: Modifier = Modifier,
-  onSkillClicked: () -> Unit = {},
-  onFirstToken: (Model) -> Unit = {},
   onGenerateResponseDone: (Model) -> Unit = {},
   onResetSessionClickedOverride: ((Task, Model) -> Unit)? = null,
   composableBelowMessageList: @Composable (Model) -> Unit = {},
-  emptyStateComposable: @Composable (Model) -> Unit = {},
-  allowEditingSystemPrompt: Boolean = false,
-  curSystemPrompt: String = "",
-  onSystemPromptChanged: (String) -> Unit = {},
-  sendMessageTrigger: SendMessageTrigger? = null,
-  showImagePicker: Boolean = false,
-  showAudioPicker: Boolean = false,
 ) {
   val context = LocalContext.current
   val task = modelManagerViewModel.getTaskById(id = taskId)!!
-  val allowThinking = task.allowThinking()
 
   ChatView(
     task = task,
@@ -214,15 +129,12 @@ fun ChatViewWrapper(
         }
       }
       if ((text.isNotEmpty() && chatMessageText != null) || audioMessages.isNotEmpty()) {
-        if (text.isNotEmpty()) {
-          modelManagerViewModel.addTextInputHistory(text)
-        }
+        modelManagerViewModel.addTextInputHistory(text)
         viewModel.generateResponse(
           model = model,
           input = text,
           images = images,
           audioMessages = audioMessages,
-          onFirstToken = onFirstToken,
           onDone = { onGenerateResponseDone(model) },
           onError = { errorMessage ->
             viewModel.handleError(
@@ -233,7 +145,6 @@ fun ChatViewWrapper(
               modelManagerViewModel = modelManagerViewModel,
             )
           },
-          allowThinking = allowThinking,
         )
 
         firebaseAnalytics?.logEvent(
@@ -256,7 +167,6 @@ fun ChatViewWrapper(
               modelManagerViewModel = modelManagerViewModel,
             )
           },
-          allowThinking = allowThinking,
         )
       }
     },
@@ -265,26 +175,13 @@ fun ChatViewWrapper(
       if (onResetSessionClickedOverride != null) {
         onResetSessionClickedOverride(task, model)
       } else {
-        viewModel.resetSession(
-          task = task,
-          model = model,
-          supportImage = showImagePicker,
-          supportAudio = showAudioPicker,
-        )
+        viewModel.resetSession(task = task, model = model)
       }
     },
     showStopButtonInInputWhenInProgress = true,
     onStopButtonClicked = { model -> viewModel.stopResponse(model = model) },
-    onSkillClicked = onSkillClicked,
     navigateUp = navigateUp,
     modifier = modifier,
     composableBelowMessageList = composableBelowMessageList,
-    showImagePicker = showImagePicker,
-    emptyStateComposable = emptyStateComposable,
-    allowEditingSystemPrompt = allowEditingSystemPrompt,
-    curSystemPrompt = curSystemPrompt,
-    onSystemPromptChanged = onSystemPromptChanged,
-    sendMessageTrigger = sendMessageTrigger,
-    showAudioPicker = showAudioPicker,
   )
 }

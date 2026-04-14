@@ -24,12 +24,13 @@ import com.google.ai.edge.gallery.proto.Cutout
 import com.google.ai.edge.gallery.proto.CutoutCollection
 import com.google.ai.edge.gallery.proto.ImportedModel
 import com.google.ai.edge.gallery.proto.Settings
-import com.google.ai.edge.gallery.proto.Skill
-import com.google.ai.edge.gallery.proto.Skills
 import com.google.ai.edge.gallery.proto.Theme
 import com.google.ai.edge.gallery.proto.UserData
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+
+const val DEFAULT_DOWNLOAD_SITE = "https://hf-mirror.com"
+val DEFAULT_WEB_SERVICE_ACCELERATOR = Accelerator.CPU.label
 
 // TODO(b/423700720): Change to async (suspend) functions
 interface DataStoreRepository {
@@ -40,12 +41,6 @@ interface DataStoreRepository {
   fun saveTheme(theme: Theme)
 
   fun readTheme(): Theme
-
-  fun saveSecret(key: String, value: String)
-
-  fun readSecret(key: String): String?
-
-  fun deleteSecret(key: String)
 
   fun saveAccessTokenData(accessToken: String, refreshToken: String, expiresAt: Long)
 
@@ -87,28 +82,29 @@ interface DataStoreRepository {
 
   fun deleteBenchmarkResult(index: Int)
 
-  fun addSkill(skill: Skill)
+  fun setWebServiceEnabled(enabled: Boolean)
 
-  fun setSkills(skills: List<Skill>)
+  fun isWebServiceEnabled(): Boolean
 
-  fun setSkillSelected(skill: Skill, selected: Boolean)
+  fun setWebServiceModelName(modelName: String)
 
-  fun setAllSkillsSelected(selected: Boolean)
+  fun getWebServiceModelName(): String
 
-  fun getAllSkills(): List<Skill>
+  fun setDownloadSite(site: String)
 
-  fun deleteSkill(name: String)
+  fun getDownloadSite(): String
 
-  suspend fun deleteSkills(names: Set<String>)
+  fun setWebServiceAccelerator(acceleratorLabel: String)
 
-  /** Records that a promo with the specified ID has been viewed. */
-  fun addViewedPromoId(promoId: String)
+  fun getWebServiceAccelerator(): String
 
-  /** Removes a viewed promo record. */
-  fun removeViewedPromoId(promoId: String)
+  fun setOverlayKeepAliveEnabled(enabled: Boolean)
 
-  /** Returns whether a promo with the specified ID has been viewed. */
+  fun isOverlayKeepAliveEnabled(): Boolean
+
   fun hasViewedPromo(promoId: String): Boolean
+
+  fun addViewedPromoId(promoId: String)
 }
 
 /** Repository for managing data using Proto DataStore. */
@@ -117,7 +113,6 @@ class DefaultDataStoreRepository(
   private val userDataDataStore: DataStore<UserData>,
   private val cutoutDataStore: DataStore<CutoutCollection>,
   private val benchmarkResultsDataStore: DataStore<BenchmarkResults>,
-  private val skillsDataStore: DataStore<Skills>,
 ) : DataStoreRepository {
   override fun saveTextInputHistory(history: List<String>) {
     runBlocking {
@@ -146,24 +141,6 @@ class DefaultDataStoreRepository(
       val curTheme = settings.theme
       // Use "auto" as the default theme.
       if (curTheme == Theme.THEME_UNSPECIFIED) Theme.THEME_AUTO else curTheme
-    }
-  }
-
-  override fun saveSecret(key: String, value: String) {
-    runBlocking {
-      userDataDataStore.updateData { userData ->
-        userData.toBuilder().putSecrets(key, value).build()
-      }
-    }
-  }
-
-  override fun readSecret(key: String): String? {
-    return runBlocking { userDataDataStore.data.first().secretsMap[key] }
-  }
-
-  override fun deleteSecret(key: String) {
-    runBlocking {
-      userDataDataStore.updateData { userData -> userData.toBuilder().removeSecrets(key).build() }
     }
   }
 
@@ -333,104 +310,80 @@ class DefaultDataStoreRepository(
     }
   }
 
-  override fun addSkill(skill: Skill) {
+  override fun setWebServiceEnabled(enabled: Boolean) {
     runBlocking {
-      skillsDataStore.updateData { skills ->
-        val newSkills = buildList {
-          add(skill)
-          addAll(skills.skillList)
-        }
-        skills.toBuilder().clearSkill().addAllSkill(newSkills).build()
+      dataStore.updateData { settings -> settings.toBuilder().setWebServiceEnabled(enabled).build() }
+    }
+  }
+
+  override fun isWebServiceEnabled(): Boolean {
+    return runBlocking { dataStore.data.first().webServiceEnabled }
+  }
+
+  override fun setWebServiceModelName(modelName: String) {
+    runBlocking {
+      dataStore.updateData { settings ->
+        settings.toBuilder().setWebServiceModelName(modelName).build()
       }
     }
   }
 
-  override fun setSkills(skills: List<Skill>) {
+  override fun getWebServiceModelName(): String {
+    return runBlocking { dataStore.data.first().webServiceModelName }
+  }
+
+  override fun setDownloadSite(site: String) {
     runBlocking {
-      skillsDataStore.updateData { curSkills ->
-        curSkills.toBuilder().clearSkill().addAllSkill(skills).build()
+      dataStore.updateData { settings -> settings.toBuilder().setDownloadSite(site).build() }
+    }
+  }
+
+  override fun getDownloadSite(): String {
+    return runBlocking {
+      val site = dataStore.data.first().downloadSite
+      if (site.isBlank()) DEFAULT_DOWNLOAD_SITE else site
+    }
+  }
+
+  override fun setWebServiceAccelerator(acceleratorLabel: String) {
+    runBlocking {
+      dataStore.updateData {
+        it.toBuilder().setWebServiceAccelerator(acceleratorLabel).build()
       }
     }
   }
 
-  override fun setSkillSelected(skill: Skill, selected: Boolean) {
-    runBlocking {
-      skillsDataStore.updateData { skills ->
-        val newSkills = mutableListOf<Skill>()
-        for (curSkill in skills.skillList) {
-          if (curSkill.name == skill.name) {
-            newSkills.add(curSkill.toBuilder().setSelected(selected).build())
-          } else {
-            newSkills.add(curSkill)
-          }
-        }
-        Skills.newBuilder().addAllSkill(newSkills).build()
-      }
+  override fun getWebServiceAccelerator(): String {
+    return runBlocking {
+      val accelerator = dataStore.data.first().webServiceAccelerator
+      if (accelerator.isBlank()) DEFAULT_WEB_SERVICE_ACCELERATOR else accelerator
     }
   }
 
-  override fun setAllSkillsSelected(selected: Boolean) {
+  override fun setOverlayKeepAliveEnabled(enabled: Boolean) {
     runBlocking {
-      skillsDataStore.updateData { skills ->
-        val newSkills = mutableListOf<Skill>()
-        for (curSkill in skills.skillList) {
-          newSkills.add(curSkill.toBuilder().setSelected(selected).build())
-        }
-        Skills.newBuilder().addAllSkill(newSkills).build()
-      }
+      dataStore.updateData { it.toBuilder().setOverlayKeepAliveEnabled(enabled).build() }
     }
   }
 
-  override fun getAllSkills(): List<Skill> {
-    return runBlocking { skillsDataStore.data.first().skillList }
+  override fun isOverlayKeepAliveEnabled(): Boolean {
+    return runBlocking { dataStore.data.first().overlayKeepAliveEnabled }
   }
 
-  override fun deleteSkill(name: String) {
-    runBlocking {
-      skillsDataStore.updateData { skills ->
-        val newSkills = mutableListOf<Skill>()
-        for (skill in skills.skillList) {
-          if (skill.name != name) {
-            newSkills.add(skill)
-          }
-        }
-        Skills.newBuilder().addAllSkill(newSkills).build()
-      }
-    }
-  }
-
-  override suspend fun deleteSkills(names: Set<String>) {
-    skillsDataStore.updateData { skills ->
-      val newSkills = skills.skillList.filter { it.name !in names }
-      skills.toBuilder().clearSkill().addAllSkill(newSkills).build()
+  override fun hasViewedPromo(promoId: String): Boolean {
+    return runBlocking {
+      dataStore.data.first().viewedPromoIdList.contains(promoId)
     }
   }
 
   override fun addViewedPromoId(promoId: String) {
     runBlocking {
-      dataStore.updateData { settings ->
-        if (settings.viewedPromoIdList.contains(promoId)) {
-          settings
-        } else {
-          settings.toBuilder().addViewedPromoId(promoId).build()
-        }
+      dataStore.updateData { userData ->
+        userData
+          .toBuilder()
+          .addViewedPromoId(promoId)
+          .build()
       }
-    }
-  }
-
-  override fun removeViewedPromoId(promoId: String) {
-    runBlocking {
-      dataStore.updateData { settings ->
-        val newList = settings.viewedPromoIdList.filter { it != promoId }
-        settings.toBuilder().clearViewedPromoId().addAllViewedPromoId(newList).build()
-      }
-    }
-  }
-
-  override fun hasViewedPromo(promoId: String): Boolean {
-    return runBlocking {
-      val settings = dataStore.data.first()
-      settings.viewedPromoIdList.contains(promoId)
     }
   }
 }

@@ -78,6 +78,11 @@ message Settings {
   // copybara:strip_end
 
   repeated string viewed_promo_id = 10;
+  bool web_service_enabled = 11;
+  string web_service_model_name = 12;
+  string download_site = 13;
+  string web_service_accelerator = 14;
+  bool overlay_keep_alive_enabled = 15;
 }
 
 message UserData {

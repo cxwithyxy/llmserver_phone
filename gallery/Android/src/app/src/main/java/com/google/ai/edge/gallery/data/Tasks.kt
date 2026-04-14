@@ -62,9 +62,6 @@ data class Task(
    */
   val description: String,
 
-  /** Shorter description (within 6 words) of the task. */
-  val shortDescription: String = "",
-
   /**
    * (optional)
    *
@@ -103,14 +100,8 @@ data class Task(
   /** Whether the task is experimental. */
   val experimental: Boolean = false,
 
-  /** Whether the task should have a "new" badge on home screen. */
-  val newFeature: Boolean = false,
-
   /** Whether to use theme color instead of the task tint color. */
   val useThemeColor: Boolean = false,
-
-  /** The default system prompt for this task. */
-  val defaultSystemPrompt: String = "",
 
   // The following fields are only used for built-in tasks. Can ignore if you are creating your own
   // custom tasks.
@@ -122,12 +113,18 @@ data class Task(
   /** Placeholder text for the text input field. */
   @StringRes val textInputPlaceHolderRes: Int = R.string.chat_textinput_placeholder,
 
+  /** Default system prompt. */
+  val defaultSystemPrompt: String = "",
+
   // The following fields are managed by the app. Don't need to set manually.
   //
 
   var index: Int = -1,
   val updateTrigger: MutableState<Long> = mutableLongStateOf(0),
 ) {
+  /**
+   * Returns true if the task supports thinking mode.
+   */
   fun allowThinking(): Boolean {
     return id == BuiltInTaskId.LLM_CHAT ||
       id == BuiltInTaskId.LLM_ASK_IMAGE ||
@@ -143,7 +140,6 @@ object BuiltInTaskId {
   const val LLM_MOBILE_ACTIONS = "llm_mobile_actions"
   const val LLM_TINY_GARDEN = "llm_tiny_garden"
   const val MP_SCRAPBOOK = "mp_scrapbook"
-  const val LLM_AGENT_CHAT = "llm_agent_chat"
 }
 
 private val allLegacyTaskIds: MutableSet<String> =
@@ -152,7 +148,6 @@ private val allLegacyTaskIds: MutableSet<String> =
     BuiltInTaskId.LLM_PROMPT_LAB,
     BuiltInTaskId.LLM_ASK_IMAGE,
     BuiltInTaskId.LLM_ASK_AUDIO,
-    BuiltInTaskId.LLM_AGENT_CHAT,
   )
 
 fun isLegacyTasks(id: String): Boolean {

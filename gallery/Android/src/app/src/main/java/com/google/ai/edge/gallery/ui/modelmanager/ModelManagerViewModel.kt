@@ -35,6 +35,8 @@ import com.google.ai.edge.gallery.data.CategoryInfo
 import com.google.ai.edge.gallery.data.Config
 import com.google.ai.edge.gallery.data.ConfigKeys
 import com.google.ai.edge.gallery.data.DataStoreRepository
+import com.google.ai.edge.gallery.data.DEFAULT_DOWNLOAD_SITE
+import com.google.ai.edge.gallery.data.DEFAULT_WEB_SERVICE_ACCELERATOR
 import com.google.ai.edge.gallery.data.DownloadRepository
 import com.google.ai.edge.gallery.data.EMPTY_MODEL
 import com.google.ai.edge.gallery.data.IMPORTS_DIR
@@ -43,7 +45,6 @@ import com.google.ai.edge.gallery.data.ModelAllowlist
 import com.google.ai.edge.gallery.data.ModelDownloadStatus
 import com.google.ai.edge.gallery.data.ModelDownloadStatusType
 import com.google.ai.edge.gallery.data.NumberSliderConfig
-import com.google.ai.edge.gallery.data.RuntimeType
 import com.google.ai.edge.gallery.data.SOC
 import com.google.ai.edge.gallery.data.TMP_FILE_EXT
 import com.google.ai.edge.gallery.data.Task
@@ -80,18 +81,13 @@ private const val ALLOWLIST_BASE_URL =
   "https://raw.githubusercontent.com/google-ai-edge/gallery/refs/heads/main/model_allowlists"
 
 private const val TEST_MODEL_ALLOW_LIST = ""
+private const val HF_BASE_URL = "https://huggingface.co"
+private const val HF_MIRROR_BASE_URL = "https://hf-mirror.com"
 
 data class ModelInitializationStatus(
   val status: ModelInitializationStatusType,
   var error: String = "",
-  var initializedBackends: Set<String> = setOf(),
-) {
-  fun isFirstInitialization(model: Model): Boolean {
-    val backend =
-      model.getStringConfigValue(key = ConfigKeys.ACCELERATOR, defaultValue = Accelerator.GPU.label)
-    return !initializedBackends.contains(backend)
-  }
-}
+)
 
 enum class ModelInitializationStatusType {
   NOT_INITIALIZED,
@@ -143,6 +139,11 @@ data class ModelManagerUiState(
   val configValuesUpdateTrigger: Long = 0L,
   // Updated when model is imported of an imported model is deleted.
   val modelImportingUpdateTrigger: Long = 0L,
+  val webServiceEnabled: Boolean = false,
+  val webServiceModelName: String = "",
+  val downloadSite: String = DEFAULT_DOWNLOAD_SITE,
+  val webServiceAccelerator: String = DEFAULT_WEB_SERVICE_ACCELERATOR,
+  val overlayKeepAliveEnabled: Boolean = false,
 ) {
   fun isModelInitialized(model: Model): Boolean {
     return modelInitializationStatus[model.name]?.status ==
@@ -169,10 +170,10 @@ private val PREDEFINED_LLM_TASK_ORDER =
     BuiltInTaskId.LLM_ASK_IMAGE,
     BuiltInTaskId.LLM_ASK_AUDIO,
     BuiltInTaskId.LLM_CHAT,
-    BuiltInTaskId.LLM_AGENT_CHAT,
     BuiltInTaskId.LLM_PROMPT_LAB,
     BuiltInTaskId.LLM_TINY_GARDEN,
     BuiltInTaskId.LLM_MOBILE_ACTIONS,
+    // BuiltInTaskId.MP_SCRAPBOOK,
   )
 
 /**
@@ -187,7 +188,7 @@ open class ModelManagerViewModel
 @Inject
 constructor(
   private val downloadRepository: DownloadRepository,
-  val dataStoreRepository: DataStoreRepository,
+  private val dataStoreRepository: DataStoreRepository,
   private val lifecycleProvider: AppLifecycleProvider,
   private val customTasks: Set<@JvmSuppressWildcards CustomTask>,
   @ApplicationContext private val context: Context,
@@ -198,6 +199,16 @@ constructor(
 
   val authService = AuthorizationService(context)
   var curAccessToken: String = ""
+
+  init {
+    _uiState.update {
+      it.copy(
+        downloadSite = getDownloadSiteSetting(),
+        webServiceAccelerator = dataStoreRepository.getWebServiceAccelerator(),
+        overlayKeepAliveEnabled = dataStoreRepository.isOverlayKeepAliveEnabled(),
+      )
+    }
+  }
 
   override fun onCleared() {
     authService.dispose()
@@ -216,11 +227,9 @@ constructor(
   }
 
   fun getActiveCustomTasks(): List<CustomTask> {
-    return customTasks.toList()
-  }
-
-  fun getSelectedModel(): Model? {
-    return uiState.value.selectedModel
+    return customTasks.filter {
+      true
+    }
   }
 
   fun getModelByName(name: String): Model? {
@@ -286,10 +295,12 @@ constructor(
     // Delete the model files first.
     deleteModel(model = model)
 
+    val resolvedModel = model.withResolvedDownloadSite(getResolvedDownloadSite())
+
     // Start to send download request.
     downloadRepository.downloadModel(
       task = task,
-      model = model,
+      model = resolvedModel,
       onStatusUpdated = this::setDownloadStatus,
     )
   }
@@ -375,7 +386,7 @@ constructor(
         status = ModelInitializationStatusType.INITIALIZING,
       )
 
-      val onDoneFn: (error: String) -> Unit = { error ->
+      val onDone: (error: String) -> Unit = { error ->
         model.initializing = false
         if (model.instance != null) {
           Log.d(TAG, "Model '${model.name}' initialized successfully")
@@ -387,7 +398,6 @@ constructor(
             Log.d(TAG, "Model '${model.name}' needs cleaning up after init.")
             cleanupModel(context = context, task = task, model = model)
           }
-          onDone()
         } else if (error.isNotEmpty()) {
           Log.d(TAG, "Model '${model.name}' failed to initialize")
           updateModelInitializationStatus(
@@ -404,28 +414,16 @@ constructor(
           context = context,
           coroutineScope = viewModelScope,
           model = model,
-          onDone = onDoneFn,
+          onDone = onDone,
         )
     }
   }
 
-  fun cleanupModel(
-    context: Context,
-    task: Task,
-    model: Model,
-    instanceToCleanUp: Any? = model.instance,
-    onDone: () -> Unit = {},
-  ) {
-    if (instanceToCleanUp != null && instanceToCleanUp !== model.instance) {
-      Log.d(TAG, "Stale cleanup request for ${model.name}. Aborting.")
-      onDone()
-      return
-    }
-
+  fun cleanupModel(context: Context, task: Task, model: Model, onDone: () -> Unit = {}) {
     if (model.instance != null) {
       model.cleanUpAfterInit = false
       Log.d(TAG, "Cleaning up model '${model.name}'...")
-      val onDoneFn: () -> Unit = {
+      val onDone: () -> Unit = {
         model.instance = null
         model.initializing = false
         updateModelInitializationStatus(
@@ -440,7 +438,7 @@ constructor(
           context = context,
           coroutineScope = viewModelScope,
           model = model,
-          onDone = onDoneFn,
+          onDone = onDone,
         )
     } else {
       // When model is being initialized and we are trying to clean it up at same time, we mark it
@@ -475,19 +473,7 @@ constructor(
   fun setInitializationStatus(model: Model, status: ModelInitializationStatus) {
     val curStatus = uiState.value.modelInitializationStatus.toMutableMap()
     if (curStatus.containsKey(model.name)) {
-      val initializedBackends = curStatus[model.name]?.initializedBackends ?: setOf()
-      val backend =
-        model.getStringConfigValue(
-          key = ConfigKeys.ACCELERATOR,
-          defaultValue = Accelerator.GPU.label,
-        )
-      val newInitializedBackends =
-        if (status.status == ModelInitializationStatusType.INITIALIZED) {
-          initializedBackends + backend
-        } else {
-          initializedBackends
-        }
-      curStatus[model.name] = status.copy(initializedBackends = newInitializedBackends)
+      curStatus[model.name] = status
       _uiState.update { _uiState.value.copy(modelInitializationStatus = curStatus) }
     }
   }
@@ -540,9 +526,57 @@ constructor(
     dataStoreRepository.saveTheme(theme = theme)
   }
 
+  fun isWebServiceEnabledSetting(): Boolean {
+    return dataStoreRepository.isWebServiceEnabled()
+  }
+
+  fun setWebServiceEnabled(enabled: Boolean) {
+    dataStoreRepository.setWebServiceEnabled(enabled)
+    _uiState.update { it.copy(webServiceEnabled = enabled) }
+  }
+
+  fun getWebServiceModelNameSetting(): String {
+    return dataStoreRepository.getWebServiceModelName()
+  }
+
+  fun setWebServiceModelName(modelName: String) {
+    dataStoreRepository.setWebServiceModelName(modelName)
+    _uiState.update { it.copy(webServiceModelName = modelName) }
+  }
+
+  fun getDownloadSiteSetting(): String {
+    return normalizeDownloadSite(dataStoreRepository.getDownloadSite())
+  }
+
+  fun setDownloadSite(site: String) {
+    val normalized = normalizeDownloadSite(site)
+    dataStoreRepository.setDownloadSite(normalized)
+    _uiState.update { it.copy(downloadSite = normalized) }
+  }
+
+  fun getWebServiceAcceleratorSetting(): String {
+    return dataStoreRepository.getWebServiceAccelerator()
+  }
+
+  fun setWebServiceAccelerator(acceleratorLabel: String) {
+    val normalized = acceleratorLabel.ifBlank { DEFAULT_WEB_SERVICE_ACCELERATOR }
+    dataStoreRepository.setWebServiceAccelerator(normalized)
+    _uiState.update { it.copy(webServiceAccelerator = normalized) }
+  }
+
+  fun isOverlayKeepAliveEnabled(): Boolean {
+    return dataStoreRepository.isOverlayKeepAliveEnabled()
+  }
+
+  fun setOverlayKeepAliveEnabled(enabled: Boolean) {
+    dataStoreRepository.setOverlayKeepAliveEnabled(enabled)
+    _uiState.update { it.copy(overlayKeepAliveEnabled = enabled) }
+  }
+
   fun getModelUrlResponse(model: Model, accessToken: String? = null): Int {
     try {
-      val url = URL(model.url)
+      val resolvedUrl = rewriteDownloadUrl(model.url, getResolvedDownloadSite())
+      val url = URL(resolvedUrl)
       val connection = url.openConnection() as HttpURLConnection
       if (accessToken != null) {
         connection.setRequestProperty("Authorization", "Bearer $accessToken")
@@ -571,7 +605,6 @@ constructor(
         BuiltInTaskId.LLM_PROMPT_LAB,
         BuiltInTaskId.LLM_TINY_GARDEN,
         BuiltInTaskId.LLM_MOBILE_ACTIONS,
-        BuiltInTaskId.LLM_AGENT_CHAT,
       )
     for (task in getTasksByIds(ids = setOfTasks)) {
       // Remove duplicated imported model if existed.
@@ -788,9 +821,10 @@ constructor(
                 model.accessToken = tokenStatusAndData.data.accessToken
               }
               Log.d(TAG, "Sending a new download request for '${model.name}'")
+              val resolvedModel = model.withResolvedDownloadSite(getResolvedDownloadSite())
               downloadRepository.downloadModel(
                 task = task,
-                model = model,
+                model = resolvedModel,
                 onStatusUpdated = this@ModelManagerViewModel::setDownloadStatus,
               )
             }
@@ -809,14 +843,11 @@ constructor(
 
     viewModelScope.launch(Dispatchers.IO) {
       try {
-        // Load model allowlist json.
         var modelAllowlist: ModelAllowlist? = null
 
-        // Try to read the test allowlist first.
         Log.d(TAG, "Loading test model allowlist.")
         modelAllowlist = readModelAllowlistFromDisk(fileName = MODEL_ALLOWLIST_TEST_FILENAME)
 
-        // Local test only.
         if (TEST_MODEL_ALLOW_LIST.isNotEmpty()) {
           Log.d(TAG, "Loading local model allowlist for testing.")
           val gson = Gson()
@@ -828,99 +859,32 @@ constructor(
         }
 
         if (modelAllowlist == null) {
-          // Load from github.
-          var version = BuildConfig.VERSION_NAME.replace(".", "_")
-          val url = getAllowlistUrl(version)
-          Log.d(TAG, "Loading model allowlist from internet. Url: $url")
-          val data = getJsonResponse<ModelAllowlist>(url = url)
-          modelAllowlist = data?.jsonObj
+          modelAllowlist = readModelAllowlistFromDisk()
+        }
 
-          if (modelAllowlist == null) {
-            Log.w(TAG, "Failed to load model allowlist from internet. Trying to load it from disk")
-            modelAllowlist = readModelAllowlistFromDisk()
-          } else {
-            Log.d(TAG, "Done: loading model allowlist from internet")
-            saveModelAllowlistToDisk(modelAllowlistContent = data?.textContent ?: "{}")
-          }
+        if (modelAllowlist == null) {
+          modelAllowlist = readModelAllowlistFromAssets()
         }
 
         if (modelAllowlist == null) {
           _uiState.update {
-            uiState.value.copy(loadingModelAllowlistError = "Failed to load model list")
+            uiState.value.copy(
+              loadingModelAllowlist = false,
+              loadingModelAllowlistError = "Failed to load model list",
+            )
           }
           return@launch
         }
 
-        Log.d(TAG, "Allowlist: $modelAllowlist")
-
-        // Convert models in the allowlist.
-        val curTasks = getActiveCustomTasks().map { it.task }
-        val nameToModel = mutableMapOf<String, Model>()
-        for (allowedModel in modelAllowlist.models) {
-          if (allowedModel.disabled == true) {
-            continue
-          }
-
-          // Ignore the allowedModel if its accelerator is only npu and this device's soc is not in
-          // its socToModelFiles.
-          val accelerators = allowedModel.defaultConfig.accelerators ?: ""
-          val acceleratorList = accelerators.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-          if (acceleratorList.size == 1 && acceleratorList[0] == "npu") {
-            val socToModelFiles = allowedModel.socToModelFiles
-            if (socToModelFiles != null && !socToModelFiles.containsKey(SOC)) {
-              Log.d(
-                TAG,
-                "Ignoring model '${allowedModel.name}' because it's NPU-only and not supported on SOC: $SOC",
-              )
-              continue
-            }
-          }
-
-          val model = allowedModel.toModel()
-          nameToModel.put(model.name, model)
-          for (taskType in allowedModel.taskTypes) {
-            val task = curTasks.find { it.id == taskType }
-            task?.models?.add(model)
-
-            if (task?.id == BuiltInTaskId.LLM_TINY_GARDEN) {
-              val newConfigs = model.configs.toMutableList()
-              newConfigs.add(RESET_CONVERSATION_TURN_COUNT_CONFIG)
-              model.configs = newConfigs
-            }
-          }
-        }
-
-        // Find models from allowlist if a task's `modelNames` field is not empty.
-        for (task in curTasks) {
-          if (task.modelNames.isNotEmpty()) {
-            for (modelName in task.modelNames) {
-              val model = nameToModel[modelName]
-              if (model == null) {
-                Log.w(TAG, "Model '${modelName}' in task '${task.label}' not found in allowlist.")
-                continue
-              }
-              task.models.add(model)
-            }
-          }
-        }
-
-        // Process all tasks.
-        processTasks()
-
-        // Update UI state.
-        _uiState.update {
-          createUiState()
-            .copy(
-              loadingModelAllowlist = false,
-              tasks = curTasks,
-              tasksByCategory = groupTasksByCategory(),
-            )
-        }
-
-        // Process pending downloads.
-        processPendingDownloads()
+        populateModelAllowlist(modelAllowlist)
       } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "loadModelAllowlist failed", e)
+        _uiState.update {
+          uiState.value.copy(
+            loadingModelAllowlist = false,
+            loadingModelAllowlistError = "Failed to load model list",
+          )
+        }
       }
     }
   }
@@ -939,8 +903,93 @@ constructor(
     }
   }
 
+  fun refreshModelAllowlistFromNetwork() {
+    _uiState.update {
+      uiState.value.copy(loadingModelAllowlist = true, loadingModelAllowlistError = "")
+    }
+    viewModelScope.launch(Dispatchers.IO) {
+      val result = downloadModelAllowlistFromNetwork()
+      if (result == null) {
+        _uiState.update {
+          uiState.value.copy(
+            loadingModelAllowlist = false,
+            loadingModelAllowlistError = "Failed to fetch model list",
+          )
+        }
+        return@launch
+      }
+      val (allowlist, content) = result
+      saveModelAllowlistToDisk(modelAllowlistContent = content)
+      populateModelAllowlist(allowlist)
+    }
+  }
+
   fun setAppInForeground(foreground: Boolean) {
     lifecycleProvider.isAppInForeground = foreground
+  }
+
+  private fun populateModelAllowlist(modelAllowlist: ModelAllowlist) {
+    Log.d(TAG, "Allowlist: $modelAllowlist")
+
+    val curTasks = getActiveCustomTasks().map { it.task }
+    val nameToModel = mutableMapOf<String, Model>()
+    for (allowedModel in modelAllowlist.models) {
+      if (allowedModel.disabled == true) {
+        continue
+      }
+
+      val accelerators = allowedModel.defaultConfig.accelerators ?: ""
+      val acceleratorList = accelerators.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+      if (acceleratorList.size == 1 && acceleratorList[0] == "npu") {
+        val socToModelFiles = allowedModel.socToModelFiles
+        if (socToModelFiles != null && !socToModelFiles.containsKey(SOC)) {
+          Log.d(
+            TAG,
+            "Ignoring model '${allowedModel.name}' because it's NPU-only and not supported on SOC: $SOC",
+          )
+          continue
+        }
+      }
+
+      val model = allowedModel.toModel()
+      nameToModel[model.name] = model
+      for (taskType in allowedModel.taskTypes) {
+        val task = curTasks.find { it.id == taskType }
+        task?.models?.add(model)
+
+        if (task?.id == BuiltInTaskId.LLM_TINY_GARDEN) {
+          val newConfigs = model.configs.toMutableList()
+          newConfigs.add(RESET_CONVERSATION_TURN_COUNT_CONFIG)
+          model.configs = newConfigs
+        }
+      }
+    }
+
+    for (task in curTasks) {
+      if (task.modelNames.isNotEmpty()) {
+        for (modelName in task.modelNames) {
+          val model = nameToModel[modelName]
+          if (model == null) {
+            Log.w(TAG, "Model '${modelName}' in task '${task.label}' not found in allowlist.")
+            continue
+          }
+          task.models.add(model)
+        }
+      }
+    }
+
+    processTasks()
+
+    _uiState.update {
+      createUiState()
+        .copy(
+          loadingModelAllowlist = false,
+          tasks = curTasks,
+          tasksByCategory = groupTasksByCategory(),
+        )
+    }
+
+    processPendingDownloads()
   }
 
   private fun saveModelAllowlistToDisk(modelAllowlistContent: String) {
@@ -952,6 +1001,58 @@ constructor(
     } catch (e: Exception) {
       Log.e(TAG, "failed to write model allowlist to disk", e)
     }
+  }
+
+  private fun readModelAllowlistFromAssets(): ModelAllowlist? {
+    return try {
+      Log.d(TAG, "Reading model allowlist from bundled assets")
+      context.assets.open(MODEL_ALLOWLIST_FILENAME).bufferedReader().use { reader ->
+        val content = reader.readText()
+        Gson().fromJson(content, ModelAllowlist::class.java)
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "failed to read model allowlist from assets", e)
+      null
+    }
+  }
+
+  private fun getResolvedDownloadSite(): String {
+    val stored = _uiState.value.downloadSite
+    return normalizeDownloadSite(if (stored.isBlank()) DEFAULT_DOWNLOAD_SITE else stored)
+  }
+
+  private fun normalizeDownloadSite(site: String): String {
+    var normalized = site.trim()
+    if (normalized.isEmpty()) {
+      normalized = DEFAULT_DOWNLOAD_SITE
+    }
+    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+      normalized = "https://$normalized"
+    }
+    return normalized.trimEnd('/')
+  }
+
+  private fun rewriteDownloadUrl(original: String, site: String): String {
+    val normalizedSite = normalizeDownloadSite(site)
+    val prefixes = listOf(HF_BASE_URL, HF_MIRROR_BASE_URL)
+    val prefix = prefixes.firstOrNull { original.startsWith(it) }
+    return if (prefix != null) {
+      normalizedSite + original.removePrefix(prefix)
+    } else {
+      original
+    }
+  }
+
+  private fun Model.withResolvedDownloadSite(site: String): Model {
+    val newUrl = rewriteDownloadUrl(this.url, site)
+    val newExtraFiles =
+      this.extraDataFiles.map { dataFile ->
+        dataFile.copy(url = rewriteDownloadUrl(dataFile.url, site))
+      }
+    if (newUrl == this.url && newExtraFiles == this.extraDataFiles) {
+      return this
+    }
+    return this.copy(url = newUrl, extraDataFiles = newExtraFiles)
   }
 
   private fun readModelAllowlistFromDisk(
@@ -994,7 +1095,30 @@ constructor(
       tasksByCategory = mapOf(),
       modelDownloadStatus = mapOf(),
       modelInitializationStatus = mapOf(),
+      webServiceEnabled = false,
+      webServiceModelName = "",
+      downloadSite = DEFAULT_DOWNLOAD_SITE,
+      webServiceAccelerator = DEFAULT_WEB_SERVICE_ACCELERATOR,
+      overlayKeepAliveEnabled = false,
     )
+  }
+
+  private fun downloadModelAllowlistFromNetwork(): Pair<ModelAllowlist, String>? {
+    return try {
+      val url = getAllowlistUrl()
+      Log.d(TAG, "Fetching model allowlist from internet. Url: $url")
+      val response = getJsonResponse<ModelAllowlist>(url = url)
+      val modelAllowlist = response?.jsonObj
+      if (modelAllowlist != null) {
+        val content = response.textContent ?: Gson().toJson(modelAllowlist)
+        modelAllowlist to content
+      } else {
+        null
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to download allowlist", e)
+      null
+    }
   }
 
   private fun createUiState(): ModelManagerUiState {
@@ -1026,7 +1150,6 @@ constructor(
       // Add to task.
       tasks.get(key = BuiltInTaskId.LLM_CHAT)?.models?.add(model)
       tasks.get(key = BuiltInTaskId.LLM_PROMPT_LAB)?.models?.add(model)
-      tasks.get(key = BuiltInTaskId.LLM_AGENT_CHAT)?.models?.add(model)
       if (model.llmSupportImage) {
         tasks.get(key = BuiltInTaskId.LLM_ASK_IMAGE)?.models?.add(model)
       }
@@ -1056,6 +1179,11 @@ constructor(
     val textInputHistory = dataStoreRepository.readTextInputHistory()
     Log.d(TAG, "text input history: $textInputHistory")
 
+    val webServiceEnabled = dataStoreRepository.isWebServiceEnabled()
+    val webServiceModelName = dataStoreRepository.getWebServiceModelName()
+    val downloadSite = getDownloadSiteSetting()
+    val webServiceAccelerator = dataStoreRepository.getWebServiceAccelerator()
+
     Log.d(TAG, "model download status: $modelDownloadStatus")
     return ModelManagerUiState(
       tasks = getActiveCustomTasks().map { it.task }.toList(),
@@ -1063,6 +1191,11 @@ constructor(
       modelDownloadStatus = modelDownloadStatus,
       modelInitializationStatus = modelInstances,
       textInputHistory = textInputHistory,
+      webServiceEnabled = webServiceEnabled,
+      webServiceModelName = webServiceModelName,
+      downloadSite = downloadSite,
+      webServiceAccelerator = webServiceAccelerator,
+      overlayKeepAliveEnabled = dataStoreRepository.isOverlayKeepAliveEnabled(),
     )
   }
 
@@ -1079,11 +1212,6 @@ constructor(
         }
         .toMutableList()
     val llmMaxToken = info.llmConfig.defaultMaxTokens
-    val llmSupportImage = info.llmConfig.supportImage
-    val llmSupportAudio = info.llmConfig.supportAudio
-    val llmSupportTinyGarden = info.llmConfig.supportTinyGarden
-    val llmSupportMobileActions = info.llmConfig.supportMobileActions
-    val llmSupportThinking = info.llmConfig.supportThinking
     val configs: MutableList<Config> =
       createLlmChatConfigs(
           defaultMaxToken = llmMaxToken,
@@ -1091,9 +1219,12 @@ constructor(
           defaultTopP = info.llmConfig.defaultTopp,
           defaultTemperature = info.llmConfig.defaultTemperature,
           accelerators = accelerators,
-          supportThinking = llmSupportThinking,
         )
         .toMutableList()
+    val llmSupportImage = info.llmConfig.supportImage
+    val llmSupportAudio = info.llmConfig.supportAudio
+    val llmSupportTinyGarden = info.llmConfig.supportTinyGarden
+    val llmSupportMobileActions = info.llmConfig.supportMobileActions
     val model =
       Model(
         name = info.fileName,
@@ -1108,12 +1239,10 @@ constructor(
         llmSupportAudio = llmSupportAudio,
         llmSupportTinyGarden = llmSupportTinyGarden,
         llmSupportMobileActions = llmSupportMobileActions,
-        llmSupportThinking = llmSupportThinking,
         llmMaxToken = llmMaxToken,
         accelerators = accelerators,
         // We assume all imported models are LLM for now.
         isLlm = true,
-        runtimeType = RuntimeType.LITERT_LM,
       )
     model.preProcess()
 
@@ -1279,21 +1408,7 @@ constructor(
     error: String = "",
   ) {
     val curModelInstance = uiState.value.modelInitializationStatus.toMutableMap()
-    val initializedBackends = curModelInstance[model.name]?.initializedBackends ?: setOf()
-    val backend =
-      model.getStringConfigValue(key = ConfigKeys.ACCELERATOR, defaultValue = Accelerator.GPU.label)
-    val newInitializedBackends =
-      if (status == ModelInitializationStatusType.INITIALIZED) {
-        initializedBackends + backend
-      } else {
-        initializedBackends
-      }
-    curModelInstance[model.name] =
-      ModelInitializationStatus(
-        status = status,
-        error = error,
-        initializedBackends = newInitializedBackends,
-      )
+    curModelInstance[model.name] = ModelInitializationStatus(status = status, error = error)
     val newUiState = uiState.value.copy(modelInitializationStatus = curModelInstance)
     _uiState.update { newUiState }
   }
@@ -1320,6 +1435,8 @@ constructor(
   }
 }
 
-private fun getAllowlistUrl(version: String): String {
+private fun getAllowlistUrl(): String {
+  val version = BuildConfig.VERSION_NAME.replace(".", "_")
+
   return "$ALLOWLIST_BASE_URL/${version}.json"
 }

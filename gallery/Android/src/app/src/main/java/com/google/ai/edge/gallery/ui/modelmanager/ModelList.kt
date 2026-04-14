@@ -22,13 +22,11 @@ package com.google.ai.edge.gallery.ui.modelmanager
 // import com.google.ai.edge.gallery.ui.theme.GalleryTheme
 
 import androidx.compose.ui.platform.LocalContext
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -48,7 +46,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -162,14 +159,13 @@ fun ModelList(
     modifier = Modifier.background(color = getTaskBgColor(task = task)),
   ) {
     LazyColumn(
-      modifier = modifier.padding(horizontal = 16.dp),
+      modifier = modifier.padding(top = 32.dp).padding(horizontal = 16.dp),
       contentPadding = contentPadding,
       verticalArrangement = Arrangement.spacedBy(8.dp),
       state = listState,
     ) {
       // Task header area.
       item(key = "taskHeader") {
-        Spacer(modifier = Modifier.height(32.dp))
         Column(
           verticalArrangement = Arrangement.spacedBy(8.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
