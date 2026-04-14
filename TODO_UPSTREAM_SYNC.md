@@ -106,13 +106,19 @@
 - 当前状态：**代码已存在于 upstream，待验证功能是否完整可用**
 - **2026-04-14 拆分完成**：根据功能模块将原事项拆分为以下子事项（按功能模块分类）：
 
-#### [ ] 5-1. 验证当前 Thinking Mode 实现是否完整
+#### [v] 5-1. 验证当前 Thinking Mode 实现是否完整
 - 目标：确认现有代码是否构成完整的 Thinking Mode 功能
 - 要点：
   - 检查 `enable_thinking` 参数是否正确传递到 LiteRT SDK（通过 `extraContext` Map）
   - 确认推理结果中的 thinking text 是否能正常展示（UI 展开/收起功能）
   - 验证 `ChatMessageThinking` 的渲染逻辑是否完整
 - 测试方式：编译后运行，观察 LLM Chat 中是否有 Thinking Mode UI 显示
+- **2026-04-14 检查结果**：
+  - UI 层面已完整：`ChatMessageThinking` 类、`MessageBodyThinking` Composable、ViewModel 中的 thinking text 处理逻辑都存在
+  - SDK 调用层面缺失：`LlmChatModelHelper.runInference` 的 `MessageCallback.onMessage` 始终传入 `null` 作为 thinking text，LiteRT SDK 是否返回 thinking text 未知
+  - 配置层面缺失：`model_allowlist.json` 中未配置 `llmSupportThinking` 字段
+  - 当前存在大量编译错误（资源引用、类型等），无法有效验证功能
+- **结论**：当前实现不完整，需先修复编译问题再进一步验证 SDK 支持情况
 
 #### [ ] 5-2. 测试模型支持情况
 - 目标：确认哪些本地模型支持 Thinking Mode
