@@ -113,12 +113,47 @@
 - **2026-04-14 进程**：已确认 `gallery` 目录包含完整的上游 Agent Skills 源码，编译通过，无需额外修改。模块已集成到项目中。
 
 #### [ ] 5. Thinking Mode (思考模式) 集成
-- 功能描述：可切换的多步推理过程展示
-- 关键文件：
-  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/modeling/thinking/`
-  - 相关类：`ThinkingModeViewModel`, `ThinkingScreen`
-- 注意：此功能需要模型支持（Gemma 4 及后续版本）
+- 功能描述：可切换的多步推理过程展示（通过 `enable_thinking` 上下文参数触发）
+- 关键文件（upstream 已有，无需额外下载）：
+  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/chat/MessageBodyThinking.kt`
+  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/chat/ChatMessage.kt`（`ChatMessageType.THINKING`, `ChatMessageThinking`）
+  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatViewModel.kt`（`enableThinking` 参数处理）
+  - `gallery/Android/src/app/src/main/java/com/google/ai/edge/gallery/data/Config.kt`（`SUPPORT_THINKING`, `ENABLE_THINKING`）
+- 当前状态：**代码已存在于 upstream，但需要验证功能是否完整可用**
+- 注意：此功能依赖模型和 SDK 支持，当前 LiteRT SDK 的 `runInference` 返回的 `partialThinkingResult` 始终为 null
 - 当前限制：本地模型列表中的 DeepSeek/Qwen 系列是否支持需验证
+- **2026-04-14 拆分**：此事项内容较多，已拆分为以下子事项（按功能模块分类）：
+
+#### [ ] 5-1. 验证当前 Thinking Mode 实现是否完整
+- 目标：确认现有代码是否构成完整的 Thinking Mode 功能
+- 要点：
+  - 检查 `enable_thinking` 参数是否正确传递到 LiteRT SDK（通过 `extraContext` Map）
+  - 确认推理结果中的 thinking text 是否能正常展示（UI 展开/收起功能）
+  - 验证 `ChatMessageThinking` 的渲染逻辑是否完整
+- 测试方式：编译后运行，观察 LLM Chat 中是否有 Thinking Mode UI 显示
+
+#### [ ] 5-2. 测试模型支持情况
+- 目标：确认哪些本地模型支持 Thinking Mode
+- 要点：
+  - 检查 `model_allowlist.json` 中各模型的 `llmSupportThinking` 字段（当前未配置）
+  - 验证 DeepSeek/Qwen 系列是否支持 thinking mode（需要查阅 SDK 文档或实测）
+  - 如果支持，添加 `llmSupportThinking: true` 和 `ENABLE_THINKING` config 到模型定义
+- 注意：当前 upstream 的 `model_allowlist.json` 中没有配置 `llmSupportThinking` 字段
+
+#### [ ] 5-3. 集成 Thinking Mode UI 到 LLM Chat 页面
+- 目标：确保 Thinking Mode UI 能在聊天界面正常显示
+- 要点：
+  - 检查 `MessageBodyThinking` 是否已集成到 `ChatPanel.kt` 或相关 UI 层
+  - 验证 `show_thinking` 字符串资源是否存在（R.string.show_thinking）
+  - 测试 Thinking Mode 的展开/收起交互是否正常
+- 注意：当前代码中已有 UI 类，但需要确认是否已集成到聊天界面
+
+#### [ ] 5-4. 验证 LiteRT SDK 支持情况
+- 目标：确认 LiteRT LM SDK 是否支持返回 thinking text
+- 要点：
+  - 检查 `LlmChatModelHelper.kt` 的 `runInference` 方法中 `MessageCallback.onMessage` 返回的 thinking text
+  - 当前代码中 `resultListener(message.toString(), false, null)` 的第三个参数始终为 null
+  - 需要确认 SDK 是否支持返回 thinking text，或者是否需要修改 SDK 调用方式
 
 #### [ ] 6. Ask Image (图像识别) 集成
 - 功能描述：通过相机或图库进行视觉识别
@@ -206,3 +241,12 @@
 **2026-04-13 更新**：
 - 事项 3 更新为已完成，记录了 `master-upstream-sync` 分支当前为干净 upstream 的事实
 - 新增事项 12（合并本地定制代码），标记为 `[ ]` 待办，待未来有明确需求时推进
+
+---
+
+**2026-04-14 更新（事项 5 拆分）**：
+- 根据功能模块将事项 5 拆分为 4 个子事项：
+  - **5-1**: 验证当前 Thinking Mode 实现是否完整
+  - **5-2**: 测试模型支持情况（需要添加 `llmSupportThinking` 字段）
+  - **5-3**: 集成 Thinking Mode UI 到 LLM Chat 页面
+  - **5-4**: 验证 LiteRT SDK 支持情况（当前返回的 thinking text 始终为 null）
