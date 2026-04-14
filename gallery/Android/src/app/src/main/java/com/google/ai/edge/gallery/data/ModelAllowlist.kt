@@ -54,6 +54,7 @@ data class AllowedModel(
   val llmSupportAudio: Boolean? = null,
   val llmSupportTinyGarden: Boolean? = null,
   val llmSupportMobileActions: Boolean? = null,
+  val llmSupportThinking: Boolean? = null,
   val minDeviceMemoryInGb: Int? = null,
   val bestForTaskTypes: List<String>? = null,
   val localModelFilePathOverride: String? = null,
@@ -130,6 +131,7 @@ data class AllowedModel(
               defaultTemperature = defaultTemperature,
               defaultMaxToken = llmMaxToken,
               accelerators = accelerators,
+              supportThinking = llmSupportThinking ?: false,
             )
           }
           .toMutableList()
@@ -159,6 +161,7 @@ data class AllowedModel(
       llmSupportAudio = llmSupportAudio == true,
       llmSupportTinyGarden = llmSupportTinyGarden == true,
       llmSupportMobileActions = llmSupportMobileActions == true,
+      llmSupportThinking = llmSupportThinking == true,
       llmMaxToken = llmMaxToken,
       accelerators = accelerators,
       bestForTaskIds = bestForTaskTypes ?: listOf(),

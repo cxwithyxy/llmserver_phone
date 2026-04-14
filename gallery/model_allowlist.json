@@ -9,6 +9,7 @@
       "estimatedPeakMemoryInBytes": 5905580032,
       "version": "20250520",
       "llmSupportImage": true,
+      "llmSupportThinking": true,
       "defaultConfig": {
         "topK": 64,
         "topP": 0.95,
@@ -27,6 +28,7 @@
       "estimatedPeakMemoryInBytes": 6979321856,
       "version": "20250520",
       "llmSupportImage": true,
+      "llmSupportThinking": true,
       "defaultConfig": {
         "topK": 64,
         "topP": 0.95,
