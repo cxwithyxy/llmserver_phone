@@ -162,9 +162,10 @@
   - 如果 SDK 不支持，则 Thinking Mode 功能无法实现（当前代码逻辑依赖 SDK 返回）
 - **2026-04-15 进度**：
   - 已确认 LiteRT SDK 的 `Message` 类包含 `channels` 字段（`Map<String, String>`）
-  - 已修改 `LlmChatModelHelper.kt` 的 `runInference` 方法，从 `Message.channels` 提取 `thinking` 字段并传给 `resultListener`
+  - 已恢复 `LlmChatModelHelper.kt` 的修改，从 `Message.channels` 提取 `thinking` 字段并传给 `resultListener`
   - 已确认 LiteRT SDK 的 `Conversation.sendMessageAsync` 支持 `extraContext` 参数，当前代码已正确传递
   - **需要实测验证**：LiteRT SDK 是否在 `channels` 中返回 thinking text，或 `Message.toString()` 是否包含 thinking content
+  - **2026-04-15 更新**：代码修改已完成，待编译通过后提交并推送到远程
 
 #### [ ] 6. Ask Image (图像识别) 集成
 - 功能描述：通过相机或图库进行视觉识别
