@@ -286,14 +286,11 @@ object LlmChatModelHelper {
 
     conversation.sendMessageAsync(
       Contents.of(contents),
-      extraContext,
       object : MessageCallback {
         override fun onMessage(message: Message) {
           Log.d(TAG, "token=$requestToken onMessage len=${message.toString().length}")
           resetWatchdog()
-          // Extract thinking text from channels if available
-          val thinkingText = message.getChannels().get("thinking")
-          resultListener(message.toString(), false, thinkingText)
+          resultListener(message.toString(), false, null)
         }
 
         override fun onDone() {
