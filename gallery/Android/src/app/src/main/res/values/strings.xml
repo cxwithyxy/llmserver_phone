@@ -1,4 +1,5 @@
 <!--
+
  Copyright 2025 Google LLC
 
  Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,6 +43,8 @@
   <string name="category_experimental" translatable="false">Experimental</string>
   <string name="chat_textinput_placeholder" translatable="false">Type message…</string>
   <string name="show_thinking" translatable="false">Show thinking</string>
+  <string name="aichat_initializing_title" translatable="false">Initializing AI chat...</string>
+  <string name="aichat_initializing_content" translatable="false">Please wait while the model is loading...</string>
   <string name="chat_you" translatable="false">You</string>
   <string name="chat_llm_agent_name" translatable="false">LLM</string>
   <string name="checking_access" translatable="false">Checking access...</string>
@@ -105,6 +108,14 @@
   <string name="logs_dialog_clear" translatable="false">Clear</string>
   <string name="logs_dialog_empty" translatable="false">No logs yet</string>
   <string name="logs_dialog_close" translatable="false">Close</string>
+  <string name="view_console_logs" translatable="false">View console logs</string>
+  <string name="view_in_full_screen" translatable="false">View in full screen</string>
+  <string name="skills" translatable="false">Skills</string>
+  <string name="logs_viewer_title" translatable="false">Service logs</string>
+  <string name="logs_viewer_filter_text_input_placeholder" translatable="false">Filter logs...</string>
+  <string name="logs_viewer_no_matching_logs" translatable="false">No matching logs</string>
+  <string name="shortDescription" translatable="false">Short description</string>
+  <string name="newFeature" translatable="false">New feature</string>
   <string name="edit" translatable="false">Edit</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
   <string name="expand_all" translatable="false">Expand all</string>
@@ -120,6 +131,18 @@
   <string name="listening" translatable="false">Listening...</string>
   <string name="litert_community_label" translatable="false">LiteRT community</string>
   <string name="loading_model_list" translatable="false">Loading model list...</string>
+  <string name="manage_skills" translatable="false">Manage skills</string>
+  <string name="manage_skills_description" translatable="false">Add or remove skills from the agent</string>
+  <string name="built_in_skills_title" translatable="false">Built-in skills</string>
+  <string name="custom_skills_title" translatable="false">Custom skills</string>
+  <string name="delete_selected_skills_title" translatable="false">Delete selected skills</string>
+  <string name="delete_selected_skills_content" translatable="false">Are you sure you want to delete the selected skills?</string>
+  <string name="skills_count" translatable="false">Skills</string>
+  <string name="selected_custom_skills_count" translatable="false">Selected custom skills</string>
+  <string name="featured_skills_title" translatable="false">Featured skills</string>
+  <string name="featured_skills_description" translatable="false">Explore and add skills from our featured list</string>
+  <string name="loading_skills_allowlist" translatable="false">Loading skills list...</string>
+  <string name="agent_skills" translatable="false">Agent skills</string>
   <string name="memory_warning_content" translatable="false">The model you\'ve selected may exceed your device\'s memory, which can cause the app to crash. For the best experience, we recommend trying a smaller model.</string>
   <string name="memory_warning_proceed_anyway" translatable="false">Proceed anyway</string>
   <string name="memory_warning_title" translatable="false">Memory Warning</string>

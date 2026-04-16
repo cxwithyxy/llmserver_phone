@@ -346,7 +346,7 @@
 
 **2026-04-14 新增问题追加到 5 系列**：基于编译失败和代码检查，发现以下新问题需要纳入 Thinking Mode 相关事项：
 
-#### [ ] 5-5. 补充缺失的字符串资源
+#### [v] 5-5. 补充缺失的字符串资源
 - 目标：修复 `R.string.*` 引用错误导致的编译失败
 - 要点：
   - 缺失资源：`aichat_initializing_title`, `aichat_initializing_content`, `view_console_logs`, `view_in_full_screen`, `skills`, `logs_viewer_*`, `shortDescription`, `newFeature`
