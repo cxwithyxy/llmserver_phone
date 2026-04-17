@@ -334,4 +334,71 @@
   <!-- Content description spoken when the "menu" icon is focused. [CHAR_LIMIT=NONE] -->
   <string name="cd_menu">Menu</string>
 
+  <!-- Supplement from upstream gallery (task 5-5) -->
+<string name="add_default_script" translatable="false">Add default script</string>
+<string name="added" translatable="false">Added</string>
+<string name="add_script" translatable="false">Add script</string>
+<string name="add_skill" translatable="false">Add skill</string>
+<string name="add_skill_dialog_subtitle_from_local_import" translatable="false">Please first \"adb push\" the whole skill directory to /sdcard/Download</string>
+<string name="add_skill_dialog_title_from_local_import" translatable="false">Import local skill</string>
+<string name="add_skill_from_url_dialog_title" translatable="false">Add skill from URL</string>
+<string name="add_skill_manual_input_sheet_title" translatable="false">Create a skill</string>
+<string name="add_skill_option_local_description" translatable="false">Import the skill directory locally</string>
+<string name="add_skill_option_local_title" translatable="false">Import local skill</string>
+<string name="add_skill_option_url_description" translatable="false">Enter the URL of a skill directory hosted on Web</string>
+<string name="add_skill_option_url_title" translatable="false">Load skill from URL</string>
+<string name="cd_add_icon" translatable="false">Add</string>
+<string name="cd_pick_file" translatable="false">Pick file</string>
+<string name="config_dialog_tab_model_configs" translatable="false">Model configs</string>
+<string name="config_dialog_tab_system_prompt" translatable="false">System prompt</string>
+<string name="delete_script_dialog_title" translatable="false">Delete script</string>
+<string name="delete_skill_dialog_content" translatable="false">Are you sure you want to delete the skill?</string>
+<string name="delete_skill_dialog_title" translatable="false">Delete skill</string>
+<string name="describe_input_data" translatable="false">Describe input data</string>
+<string name="describe_input_data_support_text" translatable="false">The field names need to match the ones in instructions.</string>
+<string name="describe_output_data" translatable="false">Describe output data</string>
+<string name="describe_requirements" translatable="false">Describe requirements</string>
+<string name="description_required" translatable="false">Description*</string>
+<string name="discard" translatable="false">Discard</string>
+<string name="discard_changes_dialog_content" translatable="false">You have unsaved changes. Are you sure you want to discard them?</string>
+<string name="discard_changes_dialog_title" translatable="false">Discard changes?</string>
+<string name="disclaimer_dialog_agree" translatable="false">Agree</string>
+<string name="disclaimer_dialog_content" translatable="false">Third-party skills are not authored or endorsed by Google. Google is not responsible for their contents, security, or data handling practices.\n\nPlease exercise caution before providing sensitive information, such as personal identification, tokens, or API keys.\n\nAny use of an Agent Skill is subject to the applicable terms for that Skill.</string>
+<string name="disclaimer_dialog_title" translatable="false">Add third-party skill</string>
+<string name="duplicated_script_name" translatable="false">Duplicated script name</string>
+<string name="edit_secret" translatable="false">Edit secret</string>
+<string name="enable_skill_dialog_content" translatable="false">Please enable the skill by tapping the Skills button below.</string>
+<string name="enter_skill_url" translatable="false">Enter URL of skill\'s root directory</string>
+<string name="failed_to_save" translatable="false">Failed to save</string>
+<string name="generate_and_copy" translatable="false">Generate and copy</string>
+<string name="generate_llm_prompt_button_label" translatable="false">LLM prompt</string>
+<string name="generate_llm_prompt_title" translatable="false">Generate LLM prompt</string>
+<string name="instructions" translatable="false">Instructions</string>
+<string name="introducing" translatable="false">Introducing</string>
+<string name="max_tokens_warning_message" translatable="false">Setting max tokens above 10000 may cause app to be unstable.</string>
+<string name="name" translatable="false">Name</string>
+<string name="no_directory_selected" translatable="false">No directory selected</string>
+<string name="paste_from_clipboard" translatable="false">Paste from clipboard</string>
+<string name="pick_skill_dir" translatable="false">Pick skill\'s root directory</string>
+<string name="prompt_copied_message" translatable="false">Prompt copied to clipboard. Paste it into your favorite LLM app to generate the code and copy/paste the code here.</string>
+<string name="replace" translatable="false">Replace</string>
+<string name="replace_skill_dialog_content" translatable="false">A skill with the same name already exists. Do you want to replace it?</string>
+<string name="replace_skill_dialog_title" translatable="false">Replace existing skill</string>
+<string name="restore_default" translatable="false">Restore default</string>
+<string name="run" translatable="false">Run</string>
+<string name="save" translatable="false">Save</string>
+<string name="script_name" translatable="false">Script name</string>
+<string name="search_skill" translatable="false">Search for a skill</string>
+<string name="secret" translatable="false">Secret</string>
+<string name="select_script" translatable="false">Select script</string>
+<string name="skill_description_input_description" translatable="false">REQUIRED. A brief description of the skill\'s function and trigger conditions or keywords.</string>
+<string name="skill_instructions_input_description" translatable="false">Detailed instructions in Markdown format that LLM must follow to accomplish the task.</string>
+<string name="skill_limit_warning" translatable="false">Enabling more than %s may impact performance.</string>
+<string name="skill_name_input_description" translatable="false">REQUIRED. In the form of my-skill-name</string>
+<string name="system_prompt_updated" translatable="false">System prompt updated</string>
+<string name="turn_off_all" translatable="false">Turn off all</string>
+<string name="turn_on_all" translatable="false">Turn on all</string>
+<string name="use_call_js_template" translatable="false">Use Call JS template</string>
+<string name="view" translatable="false">View</string>
+
 </resources>
