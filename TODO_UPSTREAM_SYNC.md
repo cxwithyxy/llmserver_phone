@@ -37,7 +37,7 @@
 | Phase 1 | 2. 升级 LiteRT SDK 到 0.10.0 | ✅ 已完成 | 编译通过 |
 | Phase 1 | 3. 验证 Web Service 兼容性 | ✅ 已完成 | 确认定制代码在备份目录中 |
 | Phase 2 | 4. Agent Skills 集成 | ✅ 已完成 | 上游源码已集成 |
-| Phase 2 | 5. Thinking Mode 集成 | ⚠️ 部分完成 | UI 完整,SDK 调用和编译问题待解决 |
+| Phase 2 | 5. Thinking Mode 集成 | ⚠️ 部分完成 | UI 完整,编译修复进行中(5-8-1 已完成,剩余 5-8-2 ~ 5-8-9) |
 | Phase 2 | 6-11. 其他功能模块 | ⏸️ 暂缓 | 按需选择,暂无优先级 |
 | Phase 3 | 12-1~12-5. Web Service 合并 | ⏸️ 待评估 | 需先解决上游版本兼容性问题 |
 
@@ -115,103 +115,137 @@
 - **[ ] 5-8. 修复编译错误(2026-04-18 记录)**
   - **目标**:解决 `master-upstream-sync` 分支当前所有编译错误,使项目可正常编译通过
   - **编译命令**: `cd gallery/Android/src && ./gradlew :app:compileDebugKotlin`
-  - **错误总数**: 约 30 个错误,涉及 10 个文件,分为 5 类
+  - **错误总数**: 约 30 个错误,涉及 10 个文件,分为 9 类
+  - **拆分方式**:按错误类别拆分为 5-8-1 ~ 5-8-9,逐个修复
 
   **错误分类与详细列表**:
 
   **A. Composable 函数参数名不匹配 (`AgentChatScreen.kt`, 21 个错误)**
   - 文件: `customtasks/agentchat/AgentChatScreen.kt`
-  - 错误: 调用 Composable 函数时使用了不存在的参数名
-  - 缺失参数:
-    - `taskId` (L140)
-    - `onFirstToken` (L142)
-    - `onSkillClicked` (L199)
-    - `showImagePicker` (L200)
-    - `showAudioPicker` (L201)
-    - `allowEditingSystemPrompt` (L323)
-    - `curSystemPrompt` (L324)
-    - `onSystemPromptChanged` (L325)
-    - `emptyStateComposable` (L342)
-    - `sendMessageTrigger` (L440)
-    - `supportImage` (L555)
-    - `supportAudio` (L556)
-    - `onDone` (L557)
-    - `enableConversationConstrainedDecoding` (L558)
-  - 根因: `AgentChatScreen` 的 Composable 签名与调用方不一致,可能上游 API 已变更
+  - 错误: 调用 `LlmChatScreen` Composable 函数时使用了不存在的参数名
+  - 缺失参数: `taskId`, `onFirstToken`, `onSkillClicked`, `showImagePicker`, `showAudioPicker`, `allowEditingSystemPrompt`, `curSystemPrompt`, `onSystemPromptChanged`, `emptyStateComposable`, `sendMessageTrigger`, `supportImage`, `supportAudio`, `onDone`, `enableConversationConstrainedDecoding`
+  - 根因: `AgentChatScreen` 调用 `LlmChatScreen` 时使用的参数名与上游 `LlmChatScreen` 签名不一致
+  - 修复方案: 将 `LlmChatScreen.kt` 同步为上游版本(已添加新参数)
 
   **B. 字符串资源缺失 (`SkillManagerBottomSheet.kt`, 4 个错误)**
   - 文件: `customtasks/agentchat/SkillManagerBottomSheet.kt`
-  - 缺失资源:
-    - `selected_custom_skills_count` (L295)
-    - `skills_count` (L410, L588)
-    - `delete_selected_skills_content` (L615)
+  - 缺失资源: `selected_custom_skills_count`, `skills_count`, `delete_selected_skills_content`
+  - 修复方案: 从上游 `strings.xml` 补充缺失字符串
 
   **C. 接口实现缺失 (`DataStoreRepository.kt`, 1 个错误)**
   - 文件: `data/DataStoreRepository.kt`
-  - 错误: `DefaultDataStoreRepository` 未实现 `DataStoreRepository` 接口新增的 10 个抽象方法
-  - 缺失方法:
-    - `setWebServiceEnabled(enabled: Boolean)` / `isWebServiceEnabled(): Boolean`
-    - `setWebServiceModelName(modelName: String)` / `getWebServiceModelName(): String`
-    - `setDownloadSite(site: String)` / `getDownloadSite(): String`
-    - `setWebServiceAccelerator(acceleratorLabel: String)` / `getWebServiceAccelerator(): String`
-    - `setOverlayKeepAliveEnabled(enabled: Boolean)` / `isOverlayKeepAliveEnabled(): Boolean`
-  - 根因: 接口定义了 Web Service 配置存取方法,但实现类未同步
+  - 错误: `DefaultDataStoreRepository` 未实现 `DataStoreRepository` 接口新增的 10 个抽象方法(Web Service 配置存取)
+  - 修复方案: 删除接口中多余的 Web Service 方法声明(已在本地同步上游版本)
 
   **D. Dagger/Hilt 依赖注入参数缺失 (`AppModule.kt`, 1 个错误)**
   - 文件: `di/AppModule.kt`
-  - 错误: L149 缺少 `skillsDataStore` 参数
-  - 根因: `@Provides` 或构造函数缺少 `skillsDataStore` 依赖
+  - 错误: `provideDataStoreRepository` 缺少 `skillsDataStore` 参数
+  - 修复方案: 同步上游 AppModule,添加 `SkillsSerializer` 和 `DataStore<Skills>` 的 `@Provides` 方法
 
   **E. 返回类型不匹配 (`ModelHelperExt.kt`, 1 个错误)**
   - 文件: `runtime/ModelHelperExt.kt`
-  - 错误: L25 返回 `'LlmModelHelper'`,实际返回 `'LlmChatModelHelper'`
+  - 错误: 返回 `'LlmModelHelper'`,实际返回 `'LlmChatModelHelper'`
+  - 修复方案: 同步上游版本,`LlmChatModelHelper` 实现了 `LlmModelHelper` 接口
 
   **F. sendMessageAsync 回调签名不匹配 (`LlmChatModelHelper.kt`, 2 个错误)**
   - 文件: `ui/llmchat/LlmChatModelHelper.kt`
-  - 错误:
-    - L287: `sendMessageAsync` 参数不匹配 (Contents 类型)
-    - L295: `getChannels()` 未定义
-    - L296: 参数类型不匹配 (MatchGroup? vs String?)
+  - 错误: `sendMessageAsync` 参数不匹配,`getChannels()` 未定义,参数类型不匹配
   - 根因: LiteRT SDK API 变更,`Message` 对象的 `channels` 字段访问方式改变
+  - 修复方案: 同步上游版本,使用 `LlmModelHelper` 接口和新的 channels 访问方式
 
   **G. ViewModel 中禁止 return (`LlmChatViewModel.kt`, 1 个错误)**
   - 文件: `ui/llmchat/LlmChatViewModel.kt`
-  - 错误: L93 在协程/Composable 上下文中使用了 return
+  - 错误: 在协程/Composable 上下文中使用了 return
+  - 修复方案: 同步上游版本,使用 `coroutineScope.launch` 和 `return@launch`
 
   **H. dataStoreRepository 私有访问 (`GalleryNavGraph.kt`, 4 个错误)**
   - 文件: `ui/navigation/GalleryNavGraph.kt`
-  - 错误:
-    - L216, L240: `dataStoreRepository` 为 `ModelManagerViewModel` 的 private 成员
-    - L344, L531: `instanceToCleanUp` 参数不存在
+  - 错误: `dataStoreRepository` 为 private 成员,`instanceToCleanUp` 参数不存在
+  - 修复方案: 同步上游版本,调整访问权限和参数
 
   **I. Web Service 回调签名不匹配 (`LlmInferenceEngine.kt`, 1 个错误)**
   - 文件: `webservice/LlmInferenceEngine.kt`
-  - 错误: L236 `Function2<String, Boolean, Unit>` 不匹配期望的 `Function3<String, Boolean, String?, Unit>`
+  - 错误: `Function2<String, Boolean, Unit>` 不匹配期望的 `Function3<String, Boolean, String?, Unit>`
   - 根因: `MessageCallback.onMessage` 签名变更,新增第三个参数 (thinking text)
-
-  - **解决方案**:
-    1. 对照上游 `google-ai-edge/gallery` 最新源码,确认各文件正确签名
-    2. `AgentChatScreen.kt` — 更新 Composable 函数签名或调用方参数名
-    3. `SkillManagerBottomSheet.kt` — 补充缺失的字符串资源
-    4. `DataStoreRepository.kt` — 实现接口新增的 10 个 Web Service 存取方法
-    5. `AppModule.kt` — 补充 `skillsDataStore` 依赖
-    6. `ModelHelperExt.kt` — 修正返回类型或调整函数签名
-    7. `LlmChatModelHelper.kt` — 适配新版 LiteRT SDK API (channels 访问方式)
-    8. `LlmChatViewModel.kt` — 修正协程中的 return 用法
-    9. `GalleryNavGraph.kt` — 修改 `dataStoreRepository` 为 internal/public, 或调整调用方式; 移除/替换 `instanceToCleanUp` 参数
-    10. `LlmInferenceEngine.kt` — 更新回调函数签名以匹配新版 SDK
+  - 修复方案: 更新回调函数签名以匹配新版 SDK
 
   - **注意**: 大部分错误源于上游 `gallery` 版本升级后 API 变更,需逐个文件对照上游源码修复
-  - **目标**:确认 LiteRT LM SDK 是否支持在 `MessageCallback.onMessage` 中返回 thinking text
-  - **要点**:
-    - 当前代码中 `resultListener(message.toString(), false, null)` 第三个参数始终为 null
-    - 需要确认 SDK 的 `Message` 对象是否包含 thinking text 字段
-    - 检查 LiteRT LM SDK 文档或源码,了解 `enable_thinking` 参数的实际效果
-  - **测试方式**:
-    - 编写最小测试脚本调用 LiteRT SDK,观察 `onMessage` 返回的内容
-    - 如果 SDK 支持返回 thinking text,则需要修改 `LlmChatModelHelper.kt`
-    - 如果 SDK 不支持,则 Thinking Mode 功能无法实现(当前代码逻辑依赖 SDK 返回)
-  - **注意**:如果 SDK 不支持,可能需要考虑降级处理(不显示 thinking mode UI)
+
+##### 拆分后的子事项(按优先级排序,建议逐个处理)
+
+- **[ ] 5-8-1. 修复 LlmChatScreen 签名不匹配 (AgentChatScreen.kt, 21 个错误)**
+  - **目标**:使 `AgentChatScreen.kt` 调用 `LlmChatScreen` 的参数与上游签名一致
+  - **文件**: `customtasks/agentchat/AgentChatScreen.kt`
+  - **错误**: `taskId`, `onFirstToken`, `onSkillClicked`, `showImagePicker`, `showAudioPicker`, `allowEditingSystemPrompt`, `curSystemPrompt`, `onSystemPromptChanged`, `emptyStateComposable`, `sendMessageTrigger`, `supportImage`, `supportAudio`, `onDone`, `enableConversationConstrainedDecoding` 等参数不存在
+  - **根因**: 本地 `LlmChatScreen.kt` 缺少上游新增的参数
+  - **已执行**: 已将 `LlmChatScreen.kt` 同步为上游版本
+  - **待验证**: 同步后是否还有其他调用方需要调整
+  - **优先级**: ⭐⭐⭐ (最高,阻塞 AgentChat 模块)
+
+- **[ ] 5-8-2. 补充缺失字符串资源 (SkillManagerBottomSheet.kt, 4 个错误)**
+  - **目标**:从上游 `strings.xml` 补充缺失字符串
+  - **文件**: `res/values/strings.xml`
+  - **缺失资源**:
+    - `selected_custom_skills_count` (L295)
+    - `skills_count` (L410, L588)
+    - `delete_selected_skills_content` (L615)
+  - **修复方式**: 从上游 `strings.xml` 复制对应条目
+  - **优先级**: ⭐⭐ (低,纯资源补充)
+
+- **[ ] 5-8-3. 修复 DataStoreRepository 接口不一致 (1 个错误)**
+  - **目标**:解决 `DefaultDataStoreRepository` 未实现接口新增方法的编译错误
+  - **文件**: `data/DataStoreRepository.kt`
+  - **已执行**: 已删除接口中多余的 10 个 Web Service 方法声明(这些方法上游已移除)
+  - **优先级**: ⭐⭐⭐ (高,阻塞编译)
+
+- **[ ] 5-8-4. 修复 AppModule 依赖注入缺失 (1 个错误)**
+  - **目标**:补充 `skillsDataStore` 依赖,解决 Dagger/Hilt 编译错误
+  - **文件**: `di/AppModule.kt`
+  - **修复方案**: 同步上游 AppModule,添加以下内容:
+    - `@Provides @Singleton fun provideSkillsSerializer(): Serializer<Skills>`
+    - `@Provides @Singleton fun provideSkillsDataStore(...): DataStore<Sills>`
+    - `provideDataStoreRepository` 增加 `skillsDataStore` 参数
+  - **优先级**: ⭐⭐⭐ (高,阻塞编译)
+
+- **[ ] 5-8-5. 修复 ModelHelperExt 返回类型不匹配 (1 个错误)**
+  - **目标**:修正返回类型,解决 `'LlmModelHelper'` vs `'LlmChatModelHelper'` 错误
+  - **文件**: `runtime/ModelHelperExt.kt`
+  - **修复方案**: 同步上游版本,`LlmChatModelHelper` 已实现 `LlmModelHelper` 接口
+  - **优先级**: ⭐⭐⭐ (高,阻塞编译)
+
+- **[ ] 5-8-6. 修复 LlmChatModelHelper SDK API 不兼容 (2 个错误)**
+  - **目标**:适配新版 LiteRT SDK API,解决 `sendMessageAsync` 参数和 `getChannels()` 错误
+  - **文件**: `ui/llmchat/LlmChatModelHelper.kt`
+  - **错误**:
+    - L287: `sendMessageAsync` 参数不匹配 (Contents 类型)
+    - L295: `getChannels()` 未定义
+    - L296: 参数类型不匹配 (MatchGroup? vs String?)
+  - **修复方案**: 同步上游版本,使用 `LlmModelHelper` 接口和新的 channels 访问方式
+  - **优先级**: ⭐⭐⭐ (高,阻塞编译)
+
+- **[ ] 5-8-7. 修复 LlmChatViewModel return 用法错误 (1 个错误)**
+  - **目标**:修正协程/Composable 上下文中的 return 用法
+  - **文件**: `ui/llmchat/LlmChatViewModel.kt`
+  - **错误**: L93 在协程中使用了 return 而非 return@launch
+  - **修复方案**: 同步上游版本,改用 `coroutineScope.launch { ... return@launch }`
+  - **优先级**: ⭐⭐⭐ (高,阻塞编译)
+
+- **[ ] 5-8-8. 修复 GalleryNavGraph 访问权限问题 (4 个错误)**
+  - **目标**:解决 `dataStoreRepository` 私有访问和 `instanceToCleanUp` 参数不存在
+  - **文件**: `ui/navigation/GalleryNavGraph.kt`
+  - **错误**:
+    - L216, L240: `dataStoreRepository` 为 private 成员
+    - L344, L531: `instanceToCleanUp` 参数不存在
+  - **修复方案**: 同步上游版本,调整访问权限和参数
+  - **优先级**: ⭐⭐⭐ (高,阻塞编译)
+
+- **[ ] 5-8-9. 修复 LlmInferenceEngine 回调签名不匹配 (1 个错误)**
+  - **目标**:更新回调函数签名以匹配新版 SDK
+  - **文件**: `webservice/LlmInferenceEngine.kt`
+  - **错误**: L236 `Function2<String, Boolean, Unit>` 不匹配期望的 `Function3<String, Boolean, String?, Unit>`
+  - **根因**: `MessageCallback.onMessage` 签名变更,新增第三个参数 (thinking text)
+  - **修复方案**: 更新回调函数签名,新增 `thinkingText: String?` 参数
+  - **优先级**: ⭐⭐ (中,Web Service 模块)
 
 #### [ ] 6. Ask Image (图像识别) 集成 - ⏸️ 暂缓
 - **功能描述**:通过相机或图库进行视觉识别
