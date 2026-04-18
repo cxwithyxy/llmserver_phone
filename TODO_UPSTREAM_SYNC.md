@@ -112,7 +112,96 @@
     - 可能需要同步其他相关类或接口定义
   - **注意**:这些问题可能与上游代码版本差异有关,需确认使用的 gallery 版本
 
-- **[ ] 5-7. 验证 SDK 返回 thinking text 的能力**
+- **[ ] 5-8. 修复编译错误(2026-04-18 记录)**
+  - **目标**:解决 `master-upstream-sync` 分支当前所有编译错误,使项目可正常编译通过
+  - **编译命令**: `cd gallery/Android/src && ./gradlew :app:compileDebugKotlin`
+  - **错误总数**: 约 30 个错误,涉及 10 个文件,分为 5 类
+
+  **错误分类与详细列表**:
+
+  **A. Composable 函数参数名不匹配 (`AgentChatScreen.kt`, 21 个错误)**
+  - 文件: `customtasks/agentchat/AgentChatScreen.kt`
+  - 错误: 调用 Composable 函数时使用了不存在的参数名
+  - 缺失参数:
+    - `taskId` (L140)
+    - `onFirstToken` (L142)
+    - `onSkillClicked` (L199)
+    - `showImagePicker` (L200)
+    - `showAudioPicker` (L201)
+    - `allowEditingSystemPrompt` (L323)
+    - `curSystemPrompt` (L324)
+    - `onSystemPromptChanged` (L325)
+    - `emptyStateComposable` (L342)
+    - `sendMessageTrigger` (L440)
+    - `supportImage` (L555)
+    - `supportAudio` (L556)
+    - `onDone` (L557)
+    - `enableConversationConstrainedDecoding` (L558)
+  - 根因: `AgentChatScreen` 的 Composable 签名与调用方不一致,可能上游 API 已变更
+
+  **B. 字符串资源缺失 (`SkillManagerBottomSheet.kt`, 4 个错误)**
+  - 文件: `customtasks/agentchat/SkillManagerBottomSheet.kt`
+  - 缺失资源:
+    - `selected_custom_skills_count` (L295)
+    - `skills_count` (L410, L588)
+    - `delete_selected_skills_content` (L615)
+
+  **C. 接口实现缺失 (`DataStoreRepository.kt`, 1 个错误)**
+  - 文件: `data/DataStoreRepository.kt`
+  - 错误: `DefaultDataStoreRepository` 未实现 `DataStoreRepository` 接口新增的 10 个抽象方法
+  - 缺失方法:
+    - `setWebServiceEnabled(enabled: Boolean)` / `isWebServiceEnabled(): Boolean`
+    - `setWebServiceModelName(modelName: String)` / `getWebServiceModelName(): String`
+    - `setDownloadSite(site: String)` / `getDownloadSite(): String`
+    - `setWebServiceAccelerator(acceleratorLabel: String)` / `getWebServiceAccelerator(): String`
+    - `setOverlayKeepAliveEnabled(enabled: Boolean)` / `isOverlayKeepAliveEnabled(): Boolean`
+  - 根因: 接口定义了 Web Service 配置存取方法,但实现类未同步
+
+  **D. Dagger/Hilt 依赖注入参数缺失 (`AppModule.kt`, 1 个错误)**
+  - 文件: `di/AppModule.kt`
+  - 错误: L149 缺少 `skillsDataStore` 参数
+  - 根因: `@Provides` 或构造函数缺少 `skillsDataStore` 依赖
+
+  **E. 返回类型不匹配 (`ModelHelperExt.kt`, 1 个错误)**
+  - 文件: `runtime/ModelHelperExt.kt`
+  - 错误: L25 返回 `'LlmModelHelper'`,实际返回 `'LlmChatModelHelper'`
+
+  **F. sendMessageAsync 回调签名不匹配 (`LlmChatModelHelper.kt`, 2 个错误)**
+  - 文件: `ui/llmchat/LlmChatModelHelper.kt`
+  - 错误:
+    - L287: `sendMessageAsync` 参数不匹配 (Contents 类型)
+    - L295: `getChannels()` 未定义
+    - L296: 参数类型不匹配 (MatchGroup? vs String?)
+  - 根因: LiteRT SDK API 变更,`Message` 对象的 `channels` 字段访问方式改变
+
+  **G. ViewModel 中禁止 return (`LlmChatViewModel.kt`, 1 个错误)**
+  - 文件: `ui/llmchat/LlmChatViewModel.kt`
+  - 错误: L93 在协程/Composable 上下文中使用了 return
+
+  **H. dataStoreRepository 私有访问 (`GalleryNavGraph.kt`, 4 个错误)**
+  - 文件: `ui/navigation/GalleryNavGraph.kt`
+  - 错误:
+    - L216, L240: `dataStoreRepository` 为 `ModelManagerViewModel` 的 private 成员
+    - L344, L531: `instanceToCleanUp` 参数不存在
+
+  **I. Web Service 回调签名不匹配 (`LlmInferenceEngine.kt`, 1 个错误)**
+  - 文件: `webservice/LlmInferenceEngine.kt`
+  - 错误: L236 `Function2<String, Boolean, Unit>` 不匹配期望的 `Function3<String, Boolean, String?, Unit>`
+  - 根因: `MessageCallback.onMessage` 签名变更,新增第三个参数 (thinking text)
+
+  - **解决方案**:
+    1. 对照上游 `google-ai-edge/gallery` 最新源码,确认各文件正确签名
+    2. `AgentChatScreen.kt` — 更新 Composable 函数签名或调用方参数名
+    3. `SkillManagerBottomSheet.kt` — 补充缺失的字符串资源
+    4. `DataStoreRepository.kt` — 实现接口新增的 10 个 Web Service 存取方法
+    5. `AppModule.kt` — 补充 `skillsDataStore` 依赖
+    6. `ModelHelperExt.kt` — 修正返回类型或调整函数签名
+    7. `LlmChatModelHelper.kt` — 适配新版 LiteRT SDK API (channels 访问方式)
+    8. `LlmChatViewModel.kt` — 修正协程中的 return 用法
+    9. `GalleryNavGraph.kt` — 修改 `dataStoreRepository` 为 internal/public, 或调整调用方式; 移除/替换 `instanceToCleanUp` 参数
+    10. `LlmInferenceEngine.kt` — 更新回调函数签名以匹配新版 SDK
+
+  - **注意**: 大部分错误源于上游 `gallery` 版本升级后 API 变更,需逐个文件对照上游源码修复
   - **目标**:确认 LiteRT LM SDK 是否支持在 `MessageCallback.onMessage` 中返回 thinking text
   - **要点**:
     - 当前代码中 `resultListener(message.toString(), false, null)` 第三个参数始终为 null
